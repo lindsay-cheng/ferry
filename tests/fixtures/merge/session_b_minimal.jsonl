@@ -1,0 +1,2 @@
+{"parentUuid":null,"type":"user","uuid":"u1-b","sessionId":"sess-b-002","gitBranch":"feature-auth","cwd":"/Users/bob/proj","timestamp":"2026-06-26T10:00:00.000Z","message":{"role":"user","content":"Added pytest coverage for auth."}}
+{"parentUuid":"u1-b","type":"assistant","uuid":"uuid-b-leaf","sessionId":"sess-b-002","gitBranch":"feature-auth","cwd":"/Users/bob/proj","timestamp":"2026-06-26T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Tests pass."}]}}

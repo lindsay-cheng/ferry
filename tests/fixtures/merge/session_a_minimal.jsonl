@@ -1,0 +1,2 @@
+{"parentUuid":null,"type":"user","uuid":"u1-a","sessionId":"sess-a-001","gitBranch":"feature-auth","cwd":"/Users/alice/proj","timestamp":"2026-06-26T10:00:00.000Z","message":{"role":"user","content":"Explored JWT auth middleware."}}
+{"parentUuid":"u1-a","type":"assistant","uuid":"uuid-a-leaf","sessionId":"sess-a-001","gitBranch":"feature-auth","cwd":"/Users/alice/proj","timestamp":"2026-06-26T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Working on auth middleware."}]}}

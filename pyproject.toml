@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "weave-sessions"
+version = "0.1.0"
+description = "Git primitives for Claude Code sessions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["claude", "claude-code", "sessions", "merge"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Version Control",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+remote = ["supabase>=2.0"]
+dev = ["supabase>=2.0", "build"]
+
+[project.scripts]
+weave = "weave.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["weave"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/weave",
+  "/fixtures",
+  "/supabase/migrations",
+  "/README.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
+]
