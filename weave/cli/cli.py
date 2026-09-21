@@ -10,11 +10,10 @@ up bracketed there too.
 """
 
 import argparse
-import os
 import subprocess
 import sys
 
-from weave import __version__, connector as cc, core
+from weave import __version__, config, connector as cc, core
 
 _TAGLINE = "git for your Claude Code agent context"
 
@@ -168,7 +167,7 @@ def main(argv=None):
                 print(f"pushed -> {remote}/{args.name}")
         elif args.cmd == "pull":
             new_id = core.pull(args.remote, args.name)
-            folder = cc.session_path(os.getcwd(), new_id).parent
+            folder = cc.session_path(str(config.project_dir()), new_id).parent
             print(f"pulled into {new_id}\n  folder: {folder}\n"
                   f"  resume: claude --resume {new_id}")
             if args.open:

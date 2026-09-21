@@ -13,7 +13,6 @@ from pathlib import Path
 from unittest import mock
 
 from weave import cli, config, connector as cc, core
-from weave.config import config as _config_mod
 from weave.core import core as _core_mod
 
 
@@ -45,17 +44,19 @@ class CliBase(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.tmp = Path(self._tmp.name)
+        self.repo = self.tmp / "proj"
+        self.repo.mkdir()
+        self.src = self.repo / "src"
+        self.src.mkdir()
+        self.cfg = self.repo / ".weave" / "config"
         patcher = mock.patch.dict(
             os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "claude")})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.cfg = self.tmp / ".weave" / "config"
-        self.cwd = "/Users/tester/proj"
-        # Redirect core defaults at their definition site.
-        for p in (mock.patch.object(_config_mod, "DEFAULT_PATH", str(self.cfg)),
-                  mock.patch.object(_core_mod.os, "getcwd", return_value=self.cwd)):
-            p.start()
-            self.addCleanup(p.stop)
+        self._orig_cwd = os.getcwd()
+        os.chdir(self.repo)
+        self.cwd = os.getcwd()
+        self.addCleanup(lambda: os.chdir(self._orig_cwd))
 
 
 class CliTests(CliBase):
@@ -70,7 +71,7 @@ class CliTests(CliBase):
             with contextlib.redirect_stdout(out):
                 rc = cli.main(["pull", "origin", "auth"])
         self.assertEqual(rc, 0)
-        self.assertEqual(len(core.ls(cwd=self.cwd)), 1)
+        self.assertEqual(len(core.ls()), 1)
 
     def test_pull_prints_written_folder(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
@@ -96,7 +97,7 @@ class CliTests(CliBase):
             with contextlib.redirect_stdout(io.StringIO()):
                 rc = cli.main(["pull", "auth"])
         self.assertEqual(rc, 0)
-        self.assertEqual(len(core.ls(cwd=self.cwd)), 1)
+        self.assertEqual(len(core.ls()), 1)
 
     def test_unknown_remote_exits_1_with_message(self):
         err = io.StringIO()
@@ -261,6 +262,50 @@ class CliTests(CliBase):
                 rc = cli.main(["pull", "auth"])
         self.assertEqual(rc, 0)
         opened.assert_not_called()
+
+
+class WalkUpCliTests(CliBase):
+    def test_nested_cwd_finds_parent_config(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        os.chdir(self.src)
+        cc.write_text(cc.session_path(self.cwd, "s1"), '{"uuid":"x"}\n')
+        fake = FakeServer()
+        with mock.patch.object(_core_mod, "_load_server", return_value=fake):
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli.main(["push", "mine", "--session", "s1"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(fake.store[("u@h:/p", "mine")], '{"uuid":"x"}\n')
+
+    def test_nested_cwd_pull_prints_project_folder(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        fake = FakeServer({("u@h:/p", "auth"):
+            '{"parentUuid":null,"type":"user","uuid":"u1","cwd":"/a",'
+            '"sessionId":"s","timestamp":"2026-06-26T10:00:00.000Z",'
+            '"message":{"role":"user","content":"hi"}}\n'})
+        os.chdir(self.src)
+        project = str(config.project_dir())
+        expected_folder = str(cc.session_path(project, "placeholder").parent)
+        with mock.patch.object(_core_mod, "_load_server", return_value=fake):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = cli.main(["pull", "auth"])
+        self.assertEqual(rc, 0)
+        self.assertIn(f"folder: {expected_folder}", out.getvalue())
+
+    def test_no_config_push_exits_not_a_project(self):
+        os.chdir(self.src)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = cli.main(["push", "n", "--session", "x"])
+        self.assertEqual(rc, 1)
+        self.assertIn("not a Weave project", err.getvalue())
+
+    def test_remote_add_creates_config_in_cwd(self):
+        os.chdir(self.src)
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = cli.main(["remote", "add", "origin", "u@h:/p"])
+        self.assertEqual(rc, 0)
+        self.assertTrue((self.src / ".weave" / "config").is_file())
 
 
 if __name__ == "__main__":

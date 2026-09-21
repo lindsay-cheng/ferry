@@ -4,6 +4,7 @@ from weave.config.config import (
     append_log,
     get_remote,
     list_remotes,
+    project_dir,
     read_log,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "append_log",
     "get_remote",
     "list_remotes",
+    "project_dir",
     "read_log",
 ]

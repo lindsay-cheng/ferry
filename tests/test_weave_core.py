@@ -59,11 +59,18 @@ class ConfigTests(_WeaveBase):
         self.assertEqual(
             config.get_remote("origin", path=self.cfg), "user@host:/srv/weave")
 
-    def test_remote_add_updates_existing(self):
+    def test_remote_add_duplicate_name_raises(self):
         core.remote_add("origin", "user@host:/old", path=self.cfg)
-        core.remote_add("origin", "user@host:/new", path=self.cfg)
+        with self.assertRaises(ValueError) as ctx:
+            core.remote_add("origin", "user@host:/new", path=self.cfg)
+        self.assertIn("already exists", str(ctx.exception))
         self.assertEqual(
-            config.get_remote("origin", path=self.cfg), "user@host:/new")
+            config.get_remote("origin", path=self.cfg), "user@host:/old")
+
+    def test_remote_add_second_name_still_works(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        core.remote_add("backup", "u@h:/b", path=self.cfg)
+        self.assertEqual(config.get_remote("backup", path=self.cfg), "u@h:/b")
 
     def test_unknown_remote_raises(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
@@ -424,6 +431,69 @@ class SupabaseEndToEndTests(_WeaveBase):
         self.assertEqual(rows, [])
         with self.assertRaises(core.WeaveError):
             core.pull("origin", "auth", cwd=self.cwd, config_path=self.cfg)
+
+
+class WalkUpTests(_WeaveBase):
+    def setUp(self):
+        super().setUp()
+        self.repo = self.tmp / "repo"
+        self.repo.mkdir()
+        self.src = self.repo / "src"
+        self.src.mkdir()
+        self.repo_cfg = self.repo / ".weave" / "config"
+        self._orig_cwd = os.getcwd()
+        self.addCleanup(lambda: os.chdir(self._orig_cwd))
+
+    def test_nested_cwd_finds_parent_config(self):
+        core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
+        os.chdir(self.src)
+        self.assertEqual(config.get_remote("origin"), "u@h:/p")
+
+    def test_nested_cwd_ls_uses_project(self):
+        core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
+        os.chdir(self.src)
+        project = str(config.project_dir())
+        cc.write_text(cc.session_path(project, "mine-1"), "{}\n")
+        cc.write_text(cc.session_path(os.getcwd(), "wrong"), "{}\n")
+        self.assertEqual(set(core.ls()), {"mine-1"})
+
+    def test_nested_cwd_push_resolves_project_sessions(self):
+        core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
+        os.chdir(self.src)
+        project = str(config.project_dir())
+        cc.write_text(cc.session_path(project, "only"), '{"uuid":"o"}\n')
+        fake = FakeServer()
+        core.push(None, "aname", None, server=fake)
+        self.assertEqual(fake.pushed, [("u@h:/p", "aname", '{"uuid":"o"}\n')])
+
+    def test_nested_cwd_pull_writes_to_project(self):
+        core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
+        fake = FakeServer({("u@h:/p", "auth"): _VALID_ENTRY})
+        os.chdir(self.src)
+        project = str(config.project_dir())
+        new_id = core.pull(None, "auth", server=fake)
+        self.assertTrue(cc.session_path(project, new_id).is_file())
+
+    def test_nested_cwd_no_sessions_names_project(self):
+        core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
+        os.chdir(self.src)
+        project = str(config.project_dir())
+        with self.assertRaises(core.WeaveError) as ctx:
+            core.push(None, "n", None, server=FakeServer())
+        self.assertIn(project, str(ctx.exception))
+        self.assertNotIn(os.getcwd(), str(ctx.exception))
+
+    def test_no_config_raises_not_a_project(self):
+        os.chdir(self.src)
+        with self.assertRaises(core.WeaveError) as ctx:
+            core.push(None, "n", "s", server=FakeServer())
+        self.assertIn("not a Weave project", str(ctx.exception))
+
+    def test_remote_add_creates_config_in_cwd(self):
+        os.chdir(self.src)
+        core.remote_add("origin", "u@h:/p")
+        self.assertTrue((self.src / ".weave" / "config").is_file())
+        self.assertEqual(config.get_remote("origin"), "u@h:/p")
 
 
 class MissingCredentialsTests(_WeaveBase):

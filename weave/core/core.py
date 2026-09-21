@@ -35,6 +35,16 @@ def remote_add(name, url, *, path=None):
     config.add_remote(name, url, path=path)
 
 
+def _project_cwd(cwd, config_path):
+    """Chat folder when caller omits ``cwd``: the Weave project root."""
+    if cwd is not None:
+        return cwd
+    try:
+        return str(config.project_dir(path=config_path))
+    except ValueError as e:
+        raise WeaveError(str(e)) from e
+
+
 def _resolve_remote(remote, *, path=None):
     """Resolve which remote to act on, defaulting to the sole configured one.
 
@@ -45,7 +55,10 @@ def _resolve_remote(remote, *, path=None):
     """
     if remote is not None:
         return remote
-    names = [name for name, _ in config.list_remotes(path=path)]
+    try:
+        names = [name for name, _ in config.list_remotes(path=path)]
+    except ValueError as e:
+        raise WeaveError(str(e)) from e
     if len(names) == 1:
         return names[0]
     if not names:
@@ -102,7 +115,6 @@ def _resolve_session(session, cwd):
     """
     if session is not None:
         return session
-    cwd = cwd or os.getcwd()
     ids = _local_sessions(cwd)
     if len(ids) == 1:
         return ids[0]
@@ -148,7 +160,11 @@ def _log_op(op, remote, name, id_, *, path):
 
 def log(*, config_path=None):
     """Return logged remote operations, newest first."""
-    return list(reversed(config.read_log(path=config_path)))
+    try:
+        entries = config.read_log(path=config_path)
+    except ValueError as e:
+        raise WeaveError(str(e)) from e
+    return list(reversed(entries))
 
 
 # --- operations --------------------------------------------------------------
@@ -183,7 +199,7 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
     url = _remote_url(remote, path=config_path)
     svr = server or _load_server()
     text = _remote_call(svr.pull, url, name, action="pull", target=f"{remote}/{name}")
-    cwd = cwd or os.getcwd()
+    cwd = _project_cwd(cwd, config_path)
     new_id = _new_id()
     lines = text.splitlines(keepends=True)
     if not lines and text:
@@ -216,7 +232,7 @@ def push(remote, name, session_id, *, cwd=None, server=None, config_path=None):
     callers can report where the push landed. Valid files are sent byte-for-byte;
     a truncated last line is dropped with a warning.
     """
-    session_id = _resolve_session(session_id, cwd)
+    session_id = _resolve_session(session_id, _project_cwd(cwd, config_path))
     text = cc.read_text(session_id)            # SessionNotFound/Ambiguous propagate
     text = _prepare_push_text(text, session_id)
     remote = _resolve_remote(remote, path=config_path)
@@ -243,7 +259,7 @@ def rm(remote, name, *, server=None, config_path=None):
 
 def ls(remote=None, *, cwd=None, server=None, config_path=None):
     if remote is None:
-        enc = cc.encode_cwd(cwd or os.getcwd())
+        enc = cc.encode_cwd(_project_cwd(cwd, config_path))
         return [sid for sid, path in cc.list_sessions()
                 if path.parent.name == enc]
     url = _remote_url(remote, path=config_path)
