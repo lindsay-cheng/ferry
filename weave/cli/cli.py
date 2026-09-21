@@ -56,7 +56,7 @@ _HELP_GROUPS = [
 _HELP_NOTES = [
     "Arguments shown as [<...>] are optional; <...> are placeholders you fill in.",
     "'<remote>' may be omitted when exactly one remote is configured.",
-    "push defaults to the newest local session; pass '--session <id>' to choose another.",
+    "push omits '--session' when only one local chat exists; pass '--session <id>' when several do.",
     "Add '-o' / '--open' to pull to resume the session immediately with 'claude --resume'.",
     "Run 'weave <command> -h' to see the parameters for a single command.",
     "Run 'weave --version' to print the installed version.",
@@ -97,8 +97,8 @@ def _build_parser():
                     help="remote name (optional when only one is configured)")
     sp.add_argument("name", metavar="<name>",
                     help="name to store the session under on the remote")
-    sp.add_argument("--session", default="auto", dest="session_id", metavar="<id>",
-                    help="local session id to upload (default: 'auto', the newest local session)")
+    sp.add_argument("--session", default=None, dest="session_id", metavar="<id>",
+                    help="local session id to upload (omit when only one local chat; required when several)")
 
     pl = sub.add_parser("pull", help="download a remote session locally",
                         description="Download <name> from a remote into a fresh local session.")
@@ -162,7 +162,10 @@ def main(argv=None):
     try:
         if args.cmd == "push":
             remote = core.push(args.remote, args.name, args.session_id)
-            print(f"pushed {args.session_id} -> {remote}/{args.name}")
+            if args.session_id:
+                print(f"pushed {args.session_id} -> {remote}/{args.name}")
+            else:
+                print(f"pushed -> {remote}/{args.name}")
         elif args.cmd == "pull":
             new_id = core.pull(args.remote, args.name)
             folder = cc.session_path(os.getcwd(), new_id).parent

@@ -159,23 +159,47 @@ class PushTests(_WeaveBase):
             core.push(None, "n", "sess-1",
                       server=FakeServer(), config_path=self.cfg)
 
-    def test_push_auto_uses_latest_local_session(self):
+    def test_push_omitted_session_with_multiple_local_raises(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         self._seed_session("old-sess", '{"uuid":"old"}\n')
         self._seed_session("new-sess", '{"uuid":"new"}\n')
-        os.utime(cc.session_path(self.cwd, "old-sess"), (1_000, 1_000))
-        os.utime(cc.session_path(self.cwd, "new-sess"), (2_000, 2_000))
+        with self.assertRaises(core.WeaveError) as ctx:
+            core.push("origin", "ambig-name", None,
+                      cwd=self.cwd, server=FakeServer(), config_path=self.cfg)
+        msg = str(ctx.exception)
+        self.assertIn(self.cwd, msg)
+        self.assertIn("old-sess", msg)
+        self.assertIn("new-sess", msg)
+        self.assertIn("--session", msg)
+
+    def test_push_omitted_session_with_one_local_pushes_it(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        self._seed_session("only-sess", '{"uuid":"only"}\n')
         fake = FakeServer()
-        core.push("origin", "auto-name", "auto",
+        core.push("origin", "solo-name", None,
                   cwd=self.cwd, server=fake, config_path=self.cfg)
         self.assertEqual(
-            fake.pushed, [("u@h:/p", "auto-name", '{"uuid":"new"}\n')])
+            fake.pushed, [("u@h:/p", "solo-name", '{"uuid":"only"}\n')])
 
-    def test_push_auto_with_no_local_sessions_raises(self):
+    def test_push_omitted_session_with_no_local_raises(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
-        with self.assertRaises(core.WeaveError):
-            core.push("origin", "n", "auto",
+        with self.assertRaises(core.WeaveError) as ctx:
+            core.push("origin", "n", None,
                       cwd=self.cwd, server=FakeServer(), config_path=self.cfg)
+        self.assertIn(self.cwd, str(ctx.exception))
+
+    def test_push_truncated_last_line_warns(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        text = '{"uuid":"x"}\n{"truncated":'
+        self._seed_session("sess-1", text)
+        fake = FakeServer()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            core.push("origin", "auth-refactor", "sess-1",
+                      server=fake, config_path=self.cfg)
+        self.assertEqual(len(caught), 1)
+        self.assertEqual(
+            fake.pushed, [("u@h:/p", "auth-refactor", '{"uuid":"x"}\n')])
 
 
 class RmTests(_WeaveBase):

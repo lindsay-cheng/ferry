@@ -85,19 +85,53 @@ def _remote_call(fn, *args, action, target):
         raise WeaveError(f"{action} {target}: {e}") from e
 
 
-# --- auto / log helpers ------------------------------------------------------
-def _resolve_session(session, cwd):
-    """Map the literal ``"auto"`` to the newest local session for `cwd`.
+# --- session / log helpers ---------------------------------------------------
+def _local_sessions(cwd):
+    """Session ids for `cwd`, using the same filter as :func:`ls`."""
+    enc = cc.encode_cwd(cwd or os.getcwd())
+    return sorted(sid for sid, path in cc.list_sessions()
+                   if path.parent.name == enc)
 
-    Any other value (an id or a path) passes through untouched. Connector
-    errors (e.g. no local sessions) surface as a ``WeaveError``.
+
+def _resolve_session(session, cwd):
+    """Return an explicit session id, or pick the sole local session for `cwd`.
+
+    When ``session`` is ``None`` (caller omitted it): one local chat for
+    ``cwd`` is used; zero or many are ``WeaveError``s that name the folder
+    and list ids when ambiguous.
     """
-    if session != "auto":
+    if session is not None:
         return session
+    cwd = cwd or os.getcwd()
+    ids = _local_sessions(cwd)
+    if len(ids) == 1:
+        return ids[0]
+    if not ids:
+        raise WeaveError(
+            f"no local Claude sessions for {cwd!r} — "
+            f"run Claude Code from that folder first")
+    listed = ", ".join(ids)
+    raise WeaveError(
+        f"multiple local sessions for {cwd!r} ({listed}); pass --session <id>")
+
+
+def _prepare_push_text(text, session_id):
+    """Return push bytes, dropping a truncated last line with a warning."""
+    if not text:
+        return text
+    lines = text.splitlines(keepends=True)
+    if not lines:
+        return text
+    last_body = lines[-1].rstrip("\r\n")
+    if not last_body:
+        return text
     try:
-        return cc.latest_session(cwd or os.getcwd())
-    except ValueError as e:
-        raise WeaveError(str(e)) from e
+        json.loads(last_body)
+        return text
+    except json.JSONDecodeError:
+        warnings.warn(
+            f"skipping invalid JSON on last line of session {session_id!r}")
+        return "".join(lines[:-1])
 
 
 def _now_iso():
@@ -176,13 +210,15 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
 def push(remote, name, session_id, *, cwd=None, server=None, config_path=None):
     """Upload the local `session_id` to `remote` (Supabase) under `name`.
 
-    `remote` may be ``None`` to use the sole configured remote, and `session_id`
-    may be ``"auto"`` to use the newest local session for `cwd`. Returns the
-    resolved remote name so callers can report where the push landed. Bytes are
-    sent as-is; all machine-specific rewriting happens on `pull`.
+    `remote` may be ``None`` to use the sole configured remote. Omit
+    `session_id` (pass ``None``) when exactly one local session exists for
+    `cwd`; otherwise pass an explicit id. Returns the resolved remote name so
+    callers can report where the push landed. Valid files are sent byte-for-byte;
+    a truncated last line is dropped with a warning.
     """
     session_id = _resolve_session(session_id, cwd)
     text = cc.read_text(session_id)            # SessionNotFound/Ambiguous propagate
+    text = _prepare_push_text(text, session_id)
     remote = _resolve_remote(remote, path=config_path)
     url = _remote_url(remote, path=config_path)
     svr = server or _load_server()

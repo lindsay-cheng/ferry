@@ -166,31 +166,49 @@ class CliTests(CliBase):
         self.assertEqual(rc, 0)
         self.assertIn("usage: weave", _strip_ansi(out.getvalue()))
 
-    def test_push_session_auto_uses_latest_local(self):
+    def test_push_without_session_with_multiple_local_exits_1(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         cc.write_text(cc.session_path(self.cwd, "old"), '{"uuid":"o"}\n')
         cc.write_text(cc.session_path(self.cwd, "new"), '{"uuid":"n"}\n')
-        os.utime(cc.session_path(self.cwd, "old"), (1_000, 1_000))
-        os.utime(cc.session_path(self.cwd, "new"), (2_000, 2_000))
         fake = FakeServer()
         with mock.patch.object(_core_mod, "_load_server", return_value=fake):
-            with contextlib.redirect_stdout(io.StringIO()):
-                rc = cli.main(["push", "aname", "--session", "auto"])
-        self.assertEqual(rc, 0)
-        self.assertEqual(fake.store[("u@h:/p", "aname")], '{"uuid":"n"}\n')
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                rc = cli.main(["push", "aname"])
+        self.assertEqual(rc, 1)
+        msg = err.getvalue()
+        self.assertIn("old", msg)
+        self.assertIn("new", msg)
+        self.assertEqual(fake.store, {})
 
-    def test_push_without_session_defaults_to_latest_local(self):
+    def test_push_without_session_with_one_local_pushes_it(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
-        cc.write_text(cc.session_path(self.cwd, "old"), '{"uuid":"o"}\n')
-        cc.write_text(cc.session_path(self.cwd, "new"), '{"uuid":"n"}\n')
-        os.utime(cc.session_path(self.cwd, "old"), (1_000, 1_000))
-        os.utime(cc.session_path(self.cwd, "new"), (2_000, 2_000))
+        cc.write_text(cc.session_path(self.cwd, "only"), '{"uuid":"o"}\n')
         fake = FakeServer()
         with mock.patch.object(_core_mod, "_load_server", return_value=fake):
             with contextlib.redirect_stdout(io.StringIO()):
                 rc = cli.main(["push", "aname"])
         self.assertEqual(rc, 0)
-        self.assertEqual(fake.store[("u@h:/p", "aname")], '{"uuid":"n"}\n')
+        self.assertEqual(fake.store[("u@h:/p", "aname")], '{"uuid":"o"}\n')
+
+    def test_push_with_explicit_session_pushes_that_one(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        cc.write_text(cc.session_path(self.cwd, "old"), '{"uuid":"o"}\n')
+        cc.write_text(cc.session_path(self.cwd, "new"), '{"uuid":"n"}\n')
+        fake = FakeServer()
+        with mock.patch.object(_core_mod, "_load_server", return_value=fake):
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli.main(["push", "aname", "--session", "old"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(fake.store[("u@h:/p", "aname")], '{"uuid":"o"}\n')
+
+    def test_help_does_not_advertise_auto_latest(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.main(["help"])
+        text = _strip_ansi(out.getvalue()).lower()
+        self.assertNotIn("newest local session", text)
+        self.assertNotIn("defaults to the newest", text)
 
     def test_log_subcommand_lists_recorded_ops(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
