@@ -18,13 +18,11 @@
   <p>Weave moves the conversation, not git.</p>
 
   <h2>Install</h2>
-  <p>Private repo — use GitHub auth (<code>gh</code> logged in, or git credentials):</p>
-  <pre><code>gh api -H "Accept: application/vnd.github.raw" \
-  repos/lindsay-cheng/weave/contents/install.sh | bash</code></pre>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/weave/main/install.sh | bash</code></pre>
 
-  <p class="note">Checks only (no install): pipe to <code>bash -s -- --check</code> instead of <code>bash</code>.</p>
+  <p class="note">Checks only (no install): <code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/weave/main/install.sh | bash -s -- --check</code></p>
 
-  <p class="note">Once this page is on a public host: <code>curl -fsSL https://YOUR_HOST/install.sh | bash</code></p>
+  <p class="note">If the GitHub repo is private, this curl URL must reach <code>install.sh</code> (public repo, or host the same script here).</p>
 
   <p><a href="https://github.com/lindsay-cheng/weave">README</a> · <a href="https://github.com/lindsay-cheng/weave/blob/main/HUB.md">hub setup</a></p>
 </body>
