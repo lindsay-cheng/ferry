@@ -15,6 +15,7 @@ import sys
 import tempfile
 import types
 import unittest
+import warnings
 from pathlib import Path
 from unittest import mock
 
@@ -29,6 +30,14 @@ _VALID_ENTRY = (
     '"cwd":"/Users/alice/proj","sessionId":"alice-sess",'
     '"timestamp":"2026-06-26T10:00:00.000Z",'
     '"message":{"role":"user","content":"hi"}}\n')
+
+_EXTRA_TYPES_TEXT = (
+    '{"type":"ai-title","title":"My chat"}\n'
+    '{"type":"file-history-snapshot","files":[]}\n'
+    '{"type":"mode","mode":"default"}\n'
+    '{"type":"permission-mode","mode":"default"}\n'
+    + _VALID_ENTRY
+)
 
 
 class _WeaveBase(unittest.TestCase):
@@ -215,14 +224,51 @@ class LogTests(_WeaveBase):
 
 
 class RewriteAndPullTests(_WeaveBase):
-    def test_rewrite_for_local_sets_cwd_and_sessionid(self):
-        entries = [{"uuid": "a", "cwd": "/old", "sessionId": "old"},
-                   {"uuid": "b", "cwd": "/old", "sessionId": "old"}]
-        out = _core_mod._rewrite_for_local(entries, "new-id", "/Users/me/proj")
-        for e in out:
-            self.assertEqual(e["cwd"], "/Users/me/proj")
-            self.assertEqual(e["sessionId"], "new-id")
-        self.assertEqual(entries[0]["cwd"], "/old")  # input not mutated
+    def test_pull_filename_matches_new_id(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        fake = FakeServer({("u@h:/p", "auth"): _VALID_ENTRY})
+        new_id = core.pull("origin", "auth", cwd=self.cwd,
+                           server=fake, config_path=self.cfg)
+        path = cc.session_path(self.cwd, new_id)
+        self.assertEqual(path.name, f"{new_id}.jsonl")
+
+    def test_pull_rewrites_cwd_and_sessionid(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        fake = FakeServer({("u@h:/p", "auth"): _VALID_ENTRY})
+        new_id = core.pull("origin", "auth", cwd=self.cwd,
+                           server=fake, config_path=self.cfg)
+        path = cc.session_path(self.cwd, new_id)
+        entries = [json.loads(l) for l in
+                   path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        self.assertTrue(entries)
+        for e in entries:
+            if "cwd" in e or "sessionId" in e:
+                self.assertEqual(e["cwd"], self.cwd)
+                self.assertEqual(e["sessionId"], new_id)
+
+    def test_pull_preserves_extra_line_types(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        fake = FakeServer({("u@h:/p", "auth"): _EXTRA_TYPES_TEXT})
+        new_id = core.pull("origin", "auth", cwd=self.cwd,
+                           server=fake, config_path=self.cfg)
+        types = [json.loads(l)["type"]
+                 for l in cc.session_path(self.cwd, new_id)
+                 .read_text(encoding="utf-8").splitlines() if l.strip()]
+        self.assertEqual(types, [
+            "ai-title", "file-history-snapshot", "mode", "permission-mode",
+            "user"])
+
+    def test_pull_truncated_last_line_warns(self):
+        core.remote_add("origin", "u@h:/p", path=self.cfg)
+        text = _VALID_ENTRY + '{"truncated":'
+        fake = FakeServer({("u@h:/p", "auth"): text})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            new_id = core.pull("origin", "auth", cwd=self.cwd,
+                               server=fake, config_path=self.cfg)
+        self.assertEqual(len(caught), 1)
+        path = cc.session_path(self.cwd, new_id)
+        self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 1)
 
     def test_pull_writes_fresh_local_session(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)

@@ -2,9 +2,9 @@
 
 Owns ALL policy (id choice, cwd/sessionId rewrite, config resolution,
 validation). Delegates mechanics to weave.connector (byte I/O),
-weave.transcript (entry editing), weave.config (remote resolution), and the
-`weave.remote` collaborator (byte transport backed by Supabase). Stdlib only
-here; the Supabase dependency lives entirely behind `weave.remote`.
+weave.config (remote resolution), and the `weave.remote` collaborator (byte
+transport backed by Supabase). Stdlib only here; the Supabase dependency lives
+entirely behind `weave.remote`.
 
 Data pipeline for the remote operations:
 
@@ -16,13 +16,14 @@ before writing anything locally.
 """
 
 import importlib
+import json
 import os
 import uuid
+import warnings
 from datetime import datetime, timezone
 
 from weave import config
 from weave import connector as cc
-from weave import transcript as tx
 
 
 class WeaveError(ValueError):
@@ -121,29 +122,53 @@ def _new_id():
     return str(uuid.uuid4())
 
 
-def _rewrite_for_local(entries, new_id, cwd):
-    return [{**e, "cwd": cwd, "sessionId": new_id} for e in entries]
+def _rewrite_pull_line(line, new_id, cwd):
+    """Rewrite cwd/sessionId on one jsonl line when present; None if invalid JSON."""
+    try:
+        obj = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict) and ("cwd" in obj or "sessionId" in obj):
+        if "cwd" in obj:
+            obj["cwd"] = cwd
+        if "sessionId" in obj:
+            obj["sessionId"] = new_id
+        return json.dumps(obj, ensure_ascii=False) + "\n"
+    return line if line.endswith("\n") else line + "\n"
 
 
 def pull(remote, name, *, cwd=None, server=None, config_path=None):
     """Download `name` from `remote` (Supabase) into a fresh local session.
 
     `remote` may be ``None`` to use the sole configured remote. Pipeline:
-    weave.remote.pull -> weave.transcript parse -> local id/cwd rewrite ->
-    connector write. Validates (unknown/ambiguous remote, transport failure,
-    empty history) and fails before any local write.
+    weave.remote.pull -> per-line cwd/sessionId rewrite -> connector write.
+    Validates (unknown/ambiguous remote, transport failure, empty history) and
+    fails before any local write.
     """
     remote = _resolve_remote(remote, path=config_path)
     url = _remote_url(remote, path=config_path)
     svr = server or _load_server()
     text = _remote_call(svr.pull, url, name, action="pull", target=f"{remote}/{name}")
-    entries = tx.from_text(text)
-    if not entries:
-        raise WeaveError(f"session {name!r} has no chat history")
     cwd = cwd or os.getcwd()
     new_id = _new_id()
-    entries = _rewrite_for_local(entries, new_id, cwd)
-    cc.write_text(cc.session_path(cwd, new_id), tx.to_text(entries))
+    lines = text.splitlines(keepends=True)
+    if not lines and text:
+        lines = [text]
+    out = []
+    for i, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        if not line:
+            continue
+        rewritten = _rewrite_pull_line(line, new_id, cwd)
+        if rewritten is None:
+            if i == len(lines) - 1:
+                warnings.warn(
+                    f"skipping invalid JSON on last line of session {name!r}")
+            continue
+        out.append(rewritten)
+    if not out:
+        raise WeaveError(f"session {name!r} has no chat history")
+    cc.write_text(cc.session_path(cwd, new_id), "".join(out))
     _log_op("pull", remote, name, new_id, path=config_path)
     return new_id
 

@@ -4,7 +4,7 @@
 
 Weave makes Claude Code sessions first-class citizens of your team's workflow. Pull a colleague's session and resume it on your machine with exactly the context they had — same thinking blocks, same tool results, same reasoning chain — as if the session had been running on your computer all along. Fork a session to explore a different approach without losing the original. Merge two sessions into one when parallel work needs to come together. Push sessions to a shared remote your whole team can pull from. With weave users don't have to waste time setting up their coding agent and transfering data/intent, instead it's as if they picked off right where the last person stopped
 
-The name is `weave merge` but the primitive is broader: Claude Code sessions should travel across machines and engineers as naturally as git commits do.
+The name is `weave merge` but the primitive is broader: Claude Code sessions should travel across machines and engineers as naturally as git commits do. Weave moves the conversation, not git.
 
 ---
 
