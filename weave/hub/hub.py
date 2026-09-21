@@ -161,7 +161,7 @@ def main(argv=None):
     p.add_argument("--host", default=_DEFAULT_HOST)
     p.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = p.parse_args(argv)
-    # ponytail: hub reads the process env; the CLI autoloads .env
+    # hub reads the process env; the CLI autoloads .env
     password = os.environ.get(_ENV, "")
     if not password:
         print(f"weave-hub: set {_ENV}", file=sys.stderr)

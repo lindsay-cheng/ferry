@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ponytail: curl|bash installer; pipx or pip --user, no clone step
+# curl|bash installer; pipx or pip --user, no clone step
 set -euo pipefail
 
 REPO="https://github.com/lindsay-cheng/weave.git"
