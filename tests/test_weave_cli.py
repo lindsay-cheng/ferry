@@ -137,6 +137,7 @@ class CliTests(CliBase):
         self.assertIn("<name>", text)
         self.assertIn("--session", text)
         self.assertIn("[<remote>]", text)
+        self.assertIn("hyphen", text)
 
     def test_help_flags_match_help_subcommand(self):
         rendered = {}

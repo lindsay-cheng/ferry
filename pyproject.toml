@@ -24,11 +24,11 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-remote = ["supabase>=2.0"]
-dev = ["supabase>=2.0", "build"]
+dev = ["build"]
 
 [project.scripts]
 weave = "weave.cli:main"
+weave-hub = "weave.hub:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["weave"]
@@ -37,7 +37,6 @@ packages = ["weave"]
 include = [
   "/weave",
   "/fixtures",
-  "/supabase/migrations",
   "/README.md",
   "/LICENSE",
   "/CHANGELOG.md",

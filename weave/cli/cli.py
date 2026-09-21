@@ -56,6 +56,7 @@ _HELP_NOTES = [
     "Arguments shown as [<...>] are optional; <...> are placeholders you fill in.",
     "'<remote>' may be omitted when exactly one remote is configured.",
     "push omits '--session' when only one local chat exists; pass '--session <id>' when several do.",
+    "Session names are letters, numbers, and hyphen; stored lowercase. Reusing a name is an error.",
     "Add '-o' / '--open' to pull to resume the session immediately with 'claude --resume'.",
     "Run 'weave <command> -h' to see the parameters for a single command.",
     "Run 'weave --version' to print the installed version.",
@@ -95,7 +96,7 @@ def _build_parser():
     sp.add_argument("remote", nargs="?", default=None, metavar="<remote>",
                     help="remote name (optional when only one is configured)")
     sp.add_argument("name", metavar="<name>",
-                    help="name to store the session under on the remote")
+                    help="letters, numbers, hyphen; stored lowercase")
     sp.add_argument("--session", default=None, dest="session_id", metavar="<id>",
                     help="local session id to upload (omit when only one local chat; required when several)")
 
@@ -119,7 +120,8 @@ def _build_parser():
     rma = rmsub.add_parser("add", help="register a remote",
                            description="Register a remote named <name> at <url>.")
     rma.add_argument("name", metavar="<name>", help="local name for the remote")
-    rma.add_argument("url", metavar="<url>", help="remote url / connection string")
+    rma.add_argument("url", metavar="<url>",
+                     help="hub url (e.g. http://localhost:8080)")
 
     lsp = sub.add_parser("ls", help="list local (or remote) sessions",
                          description="List local sessions, or sessions on <remote> when given.")

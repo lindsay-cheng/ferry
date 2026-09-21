@@ -1,19 +1,17 @@
-"""Tests for weave.core -- no real ~/.claude and no real Supabase are touched.
+"""Tests for weave.core -- no real ~/.claude is touched.
 
 Two layers of coverage:
   * policy branches via an injected in-memory `server` fake (fast, no transport);
   * an end-to-end path that drives core.push/pull/ls through the REAL
-    weave.remote, with a fake `supabase` module swapped into sys.modules so the
-    Supabase pipeline (core -> weave.remote -> client) runs without a network.
+    weave.remote against a localhost hub writing a temp folder.
 
 Run (from repo root):  python3 -m pytest tests/test_weave_core.py
 """
 
 import json
 import os
-import sys
 import tempfile
-import types
+import threading
 import unittest
 import warnings
 from pathlib import Path
@@ -21,9 +19,8 @@ from unittest import mock
 
 from weave import config, connector as cc, core
 from weave.core import core as _core_mod
+from weave.hub import make_server
 from weave.remote import remote as _remote_server
-
-from fake_supabase import FakeSupabaseClient
 
 _VALID_ENTRY = (
     '{"parentUuid":null,"type":"user","uuid":"u1",'
@@ -357,26 +354,26 @@ class LsTests(_WeaveBase):
             {"a", "b"})
 
 
-class SupabaseEndToEndTests(_WeaveBase):
-    """Drive core -> real server.py -> faked supabase client (no `server=`)."""
+class HubEndToEndTests(_WeaveBase):
+    """Drive core -> real weave.remote -> localhost hub folder (no `server=`)."""
 
     def setUp(self):
         super().setUp()
         self.server = _remote_server
-        self.client = FakeSupabaseClient()
-        fake_mod = types.ModuleType("supabase")
-        fake_mod.create_client = lambda url, key: self.client
-        self.addCleanup(self.server._reset_client_cache)
-        mods = mock.patch.dict(sys.modules, {"supabase": fake_mod})
-        mods.start()
-        self.addCleanup(mods.stop)
-        env = mock.patch.dict(
-            os.environ,
-            {"SUPABASE_URL": "https://x.supabase.co", "SUPABASE_KEY": "svc"})
+        self.hub_dir = self.tmp / "hub"
+        self.hub_dir.mkdir()
+        self.password = "test-secret"
+        env = mock.patch.dict(os.environ, {"WEAVE_HUB_PASSWORD": self.password})
         env.start()
         self.addCleanup(env.stop)
         self.server._reset_client_cache()
-        core.remote_add("origin", "weave://team", path=self.cfg)
+        self.addCleanup(self.server._reset_client_cache)
+        httpd = make_server(self.hub_dir, self.password, "127.0.0.1", 0)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        self.url = f"http://127.0.0.1:{httpd.server_port}"
+        core.remote_add("origin", self.url, path=self.cfg)
 
     def _seed_local(self, session_id, text):
         cc.write_text(cc.session_path(self.cwd, session_id), text)
@@ -384,11 +381,9 @@ class SupabaseEndToEndTests(_WeaveBase):
     def test_push_then_pull_roundtrip(self):
         self._seed_local("local-1", _VALID_ENTRY)
         core.push("origin", "auth", "local-1", config_path=self.cfg)
-        # the transcript landed in the fake DB under (remote_url, name)
-        rows = [r for r in self.client.store
-                if r["remote_url"] == "weave://team" and r["name"] == "auth"]
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["transcript"], _VALID_ENTRY)
+        self.assertEqual(
+            (self.hub_dir / "auth.jsonl").read_text(encoding="utf-8"),
+            _VALID_ENTRY)
 
         new_id = core.pull("origin", "auth", cwd=self.cwd, config_path=self.cfg)
         path = cc.session_path(self.cwd, new_id)
@@ -399,15 +394,14 @@ class SupabaseEndToEndTests(_WeaveBase):
             self.assertEqual(e["cwd"], self.cwd)
             self.assertEqual(e["sessionId"], new_id)
 
-    def test_push_overwrites_same_name(self):
+    def test_push_same_name_raises(self):
         self._seed_local("local-1", _VALID_ENTRY)
         self._seed_local("local-2", _VALID_ENTRY.replace("u1", "u2"))
         core.push("origin", "auth", "local-1", config_path=self.cfg)
-        core.push("origin", "auth", "local-2", config_path=self.cfg)
-        rows = [r for r in self.client.store
-                if r["remote_url"] == "weave://team" and r["name"] == "auth"]
-        self.assertEqual(len(rows), 1)
-        self.assertIn("u2", rows[0]["transcript"])
+        with self.assertRaises(core.WeaveError) as ctx:
+            core.push("origin", "auth", "local-2", config_path=self.cfg)
+        self.assertIn("already exists", str(ctx.exception))
+        self.assertIn("u1", (self.hub_dir / "auth.jsonl").read_text(encoding="utf-8"))
 
     def test_ls_remote_lists_names(self):
         self._seed_local("local-1", _VALID_ENTRY)
@@ -426,9 +420,7 @@ class SupabaseEndToEndTests(_WeaveBase):
         self._seed_local("local-1", _VALID_ENTRY)
         core.push("origin", "auth", "local-1", config_path=self.cfg)
         core.rm("origin", "auth", config_path=self.cfg)
-        rows = [r for r in self.client.store
-                if r["remote_url"] == "weave://team" and r["name"] == "auth"]
-        self.assertEqual(rows, [])
+        self.assertFalse((self.hub_dir / "auth.jsonl").exists())
         with self.assertRaises(core.WeaveError):
             core.pull("origin", "auth", cwd=self.cwd, config_path=self.cfg)
 
@@ -497,7 +489,7 @@ class WalkUpTests(_WeaveBase):
 
 
 class MissingCredentialsTests(_WeaveBase):
-    """No SUPABASE_* env -> server raises -> core surfaces a WeaveError."""
+    """No WEAVE_HUB_PASSWORD -> server raises -> core surfaces a WeaveError."""
 
     def setUp(self):
         super().setUp()
@@ -506,15 +498,14 @@ class MissingCredentialsTests(_WeaveBase):
         self.addCleanup(self.server._reset_client_cache)
         env = mock.patch.dict(os.environ, {}, clear=False)
         env.start()
-        os.environ.pop("SUPABASE_URL", None)
-        os.environ.pop("SUPABASE_KEY", None)
+        os.environ.pop("WEAVE_HUB_PASSWORD", None)
         self.addCleanup(env.stop)
-        # Neutralise .env autoload so the creds stay genuinely absent.
+        # Neutralise .env autoload so the password stays genuinely absent.
         loader = mock.patch("weave.remote.remote.ensure_dotenv_loaded",
                             return_value=None)
         loader.start()
         self.addCleanup(loader.stop)
-        core.remote_add("origin", "weave://team", path=self.cfg)
+        core.remote_add("origin", "http://127.0.0.1:8080", path=self.cfg)
 
     def test_pull_without_creds_is_weave_error(self):
         with self.assertRaises(core.WeaveError):

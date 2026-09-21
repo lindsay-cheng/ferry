@@ -3,14 +3,14 @@
 Owns ALL policy (id choice, cwd/sessionId rewrite, config resolution,
 validation). Delegates mechanics to weave.connector (byte I/O),
 weave.config (remote resolution), and the `weave.remote` collaborator (byte
-transport backed by Supabase). Stdlib only here; the Supabase dependency lives
-entirely behind `weave.remote`.
+transport to an HTTP folder hub). Stdlib only here; HTTP lives behind
+`weave.remote`.
 
 Data pipeline for the remote operations:
 
-    Supabase (weave_sessions) <--API--> weave.remote --text--> weave.core
+    hub folder <--HTTP--> weave.remote --text--> weave.core
 
-`weave.remote` moves raw transcript text keyed by (remote_url, name); this
+`weave.remote` moves raw transcript text keyed by (url, name); this
 module applies every machine-specific policy (fresh id, cwd/sessionId rewrite)
 before writing anything locally.
 """
@@ -188,7 +188,7 @@ def _rewrite_pull_line(line, new_id, cwd):
 
 
 def pull(remote, name, *, cwd=None, server=None, config_path=None):
-    """Download `name` from `remote` (Supabase) into a fresh local session.
+    """Download `name` from `remote` into a fresh local session.
 
     `remote` may be ``None`` to use the sole configured remote. Pipeline:
     weave.remote.pull -> per-line cwd/sessionId rewrite -> connector write.
@@ -224,7 +224,7 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
 
 
 def push(remote, name, session_id, *, cwd=None, server=None, config_path=None):
-    """Upload the local `session_id` to `remote` (Supabase) under `name`.
+    """Upload the local `session_id` to `remote` under `name`.
 
     `remote` may be ``None`` to use the sole configured remote. Omit
     `session_id` (pass ``None``) when exactly one local session exists for
@@ -244,7 +244,7 @@ def push(remote, name, session_id, *, cwd=None, server=None, config_path=None):
 
 
 def rm(remote, name, *, server=None, config_path=None):
-    """Delete the session stored as `name` on `remote` (Supabase).
+    """Delete the session stored as `name` on `remote`.
 
     `remote` may be ``None`` to use the sole configured remote. Local sessions
     are never touched. Returns the resolved remote name.
