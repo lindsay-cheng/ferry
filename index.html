@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>weave</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { font-size: 1.5rem; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; border-radius: 4px; }
+    code { font-size: 0.9rem; }
+    p.note { color: #555; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>weave</h1>
+  <p>Share Claude Code sessions between machines. Mac/Linux, Python 3.11+.</p>
+  <p>Weave moves the conversation, not git.</p>
+
+  <h2>Install</h2>
+  <p>Private repo — use GitHub auth (<code>gh</code> logged in, or git credentials):</p>
+  <pre><code>gh api -H "Accept: application/vnd.github.raw" \
+  repos/lindsay-cheng/weave/contents/install.sh | bash</code></pre>
+
+  <p class="note">Checks only (no install): pipe to <code>bash -s -- --check</code> instead of <code>bash</code>.</p>
+
+  <p class="note">Once this page is on a public host: <code>curl -fsSL https://YOUR_HOST/install.sh | bash</code></p>
+
+  <p><a href="https://github.com/lindsay-cheng/weave">README</a> · <a href="https://github.com/lindsay-cheng/weave/blob/main/HUB.md">hub setup</a></p>
+</body>
+</html>

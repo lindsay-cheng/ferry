@@ -2,6 +2,6 @@
 
 ## 0.1.0
 
-- Initial alpha release packaging
-- Local session I/O, Supabase remote transport, and Cerebras merge pipeline
-- Merge writes a `MergedContext` sidecar to `.weave/merged/` (not Claude-resumable JSONL yet)
+- CLI: push, pull, rm, remote add, ls, log
+- HTTP file hub (`weave-hub`) with shared env password
+- Pull rewrites `cwd` / `sessionId` into a new local Claude jsonl
