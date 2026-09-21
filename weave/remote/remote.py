@@ -17,9 +17,37 @@ Public surface (the contract ``weave.core`` calls):
 """
 
 import os
+from pathlib import Path
 
 _TABLE = "weave_sessions"
 _client_cache = None
+_dotenv_loaded = False
+
+
+def ensure_dotenv_loaded():
+    """Load KEY=value lines from a `.env` (cwd, or WEAVE_ENV_FILE) once."""
+    global _dotenv_loaded
+    if _dotenv_loaded:
+        return
+    _dotenv_loaded = True
+    candidates = [Path.cwd() / ".env"]
+    env_file = os.environ.get("WEAVE_ENV_FILE")
+    if env_file:
+        candidates.append(Path(env_file))
+    for path in candidates:
+        if not path.is_file():
+            continue
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            if key and key not in os.environ:
+                os.environ[key] = value
+        return
 
 
 class ServerError(ValueError):
@@ -39,9 +67,6 @@ def _client():
     if _client_cache is not None:
         return _client_cache
 
-    # Pull SUPABASE_* from a `.env` (cwd or repo root) when not already in the
-    # environment, mirroring how the merge layer resolves its Cerebras creds.
-    from weave.merge.env import ensure_dotenv_loaded
     ensure_dotenv_loaded()
 
     url = os.environ.get("SUPABASE_URL")
@@ -67,8 +92,9 @@ def _client():
 
 def _reset_client_cache():
     """Drop the cached client (test seam; called after patching credentials)."""
-    global _client_cache
+    global _client_cache, _dotenv_loaded
     _client_cache = None
+    _dotenv_loaded = False
 
 
 def push(url, name, text):

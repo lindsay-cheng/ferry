@@ -9,7 +9,7 @@ description = "Git primitives for Claude Code sessions"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-keywords = ["claude", "claude-code", "sessions", "merge"]
+keywords = ["claude", "claude-code", "sessions"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

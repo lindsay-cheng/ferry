@@ -105,7 +105,7 @@ class CredentialTests(unittest.TestCase):
         self.addCleanup(env.stop)
         # Neutralise .env autoload so "missing" means missing from the
         # environment AND from any real .env on disk.
-        loader = mock.patch("weave.merge.env.ensure_dotenv_loaded",
+        loader = mock.patch("weave.remote.remote.ensure_dotenv_loaded",
                             return_value=None)
         loader.start()
         self.addCleanup(loader.stop)
@@ -124,7 +124,7 @@ class CredentialTests(unittest.TestCase):
         seen = {}
         fake_mod.create_client = lambda url, key: seen.update(url=url, key=key) or object()
         with mock.patch.dict(sys.modules, {"supabase": fake_mod}):
-            with mock.patch("weave.merge.env.ensure_dotenv_loaded",
+            with mock.patch("weave.remote.remote.ensure_dotenv_loaded",
                             side_effect=fake_loader):
                 client = server._client()
         self.assertIsNotNone(client)

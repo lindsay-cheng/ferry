@@ -1,4 +1,4 @@
-"""argparse CLI for weave: push / pull / remote add / ls / merge.
+"""argparse CLI for weave: push / pull / remote add / ls.
 
 A thin marshalling layer over :mod:`weave.core`. Implementation lives in
 :mod:`weave.cli.cli`; run as ``python -m weave.cli``.

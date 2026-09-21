@@ -109,7 +109,7 @@ class CliTests(CliBase):
         self.assertEqual(rc, 0)
         text = out.getvalue()
         self.assertIn("push", text)
-        self.assertIn("merge", text)
+        self.assertNotIn("merge", text)
         self.assertIn("log", text)
 
     def test_help_shows_command_parameters_and_optional_markers(self):
@@ -120,7 +120,6 @@ class CliTests(CliBase):
         text = _strip_ansi(out.getvalue())
         self.assertIn("usage: weave", text)
         self.assertIn("<name>", text)
-        self.assertIn("<source-a>", text)
         self.assertIn("--session", text)
         self.assertIn("[<remote>]", text)
 
@@ -230,30 +229,6 @@ class CliTests(CliBase):
                 rc = cli.main(["pull", "auth"])
         self.assertEqual(rc, 0)
         opened.assert_not_called()
-
-    def test_merge_open_flag_resumes_session(self):
-        expected = _core_mod.MergeResult(
-            session_id="merged-123", jsonl_path="/tmp/merged-123.jsonl",
-            branch_point="bp", a_tail_len=1, b_tail_len=2)
-        with mock.patch.object(core, "merge", return_value=expected), \
-                mock.patch.object(cli.cli, "_open_session") as opened:
-            with contextlib.redirect_stdout(io.StringIO()):
-                rc = cli.main(["merge", "/tmp/a.jsonl", "/tmp/b.jsonl", "--open"])
-        self.assertEqual(rc, 0)
-        opened.assert_called_once_with("merged-123")
-
-    def test_merge_subcommand_prints_resume_hint(self):
-        expected = _core_mod.MergeResult(
-            session_id="merged-123", jsonl_path="/tmp/merged-123.jsonl",
-            branch_point="bp", a_tail_len=1, b_tail_len=2)
-        with mock.patch.object(core, "merge", return_value=expected) as m:
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                rc = cli.main(["merge", "/tmp/a.jsonl", "/tmp/b.jsonl"])
-        self.assertEqual(rc, 0)
-        m.assert_called_once_with("/tmp/a.jsonl", "/tmp/b.jsonl")
-        self.assertIn("merged-123", out.getvalue())
-        self.assertIn("claude --resume merged-123", out.getvalue())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""argparse CLI for weave: push / pull / remote add / ls / merge.
+"""argparse CLI for weave: push / pull / remote add / ls.
 
 Thin marshalling over weave.core.
 
@@ -14,7 +14,6 @@ import subprocess
 import sys
 
 from weave import __version__, core
-from weave.merge.exceptions import MergeError
 
 _TAGLINE = "git for your Claude Code agent context"
 
@@ -41,7 +40,6 @@ _HELP_GROUPS = [
     ("share agent context across sessions", [
         ("push [<remote>] <name> [--session <id>]", "Upload a local session to a remote"),
         ("pull [<remote>] <name> [-o]", "Download a remote session locally"),
-        ("merge <source-a> <source-b> [-o]", "Merge two sessions into a new session"),
     ]),
     ("manage remotes and stored sessions", [
         ("remote add <name> <url>", "Register a remote"),
@@ -58,7 +56,7 @@ _HELP_NOTES = [
     "Arguments shown as [<...>] are optional; <...> are placeholders you fill in.",
     "'<remote>' may be omitted when exactly one remote is configured.",
     "push defaults to the newest local session; pass '--session <id>' to choose another.",
-    "Add '-o' / '--open' to pull or merge to resume the session immediately with 'claude --resume'.",
+    "Add '-o' / '--open' to pull to resume the session immediately with 'claude --resume'.",
     "Run 'weave <command> -h' to see the parameters for a single command.",
     "Run 'weave --version' to print the installed version.",
 ]
@@ -128,17 +126,6 @@ def _build_parser():
     lsp.add_argument("remote", nargs="?", default=None, metavar="<remote>",
                      help="remote to list (omit to list local sessions)")
 
-    mg = sub.add_parser("merge", help="merge two sessions into a new resumable session",
-                        description="Merge two sessions into a new resumable session. Each "
-                                    "source may be a session id, a path, the name a prior "
-                                    "push/pull recorded, or 'auto' for the newest local session.")
-    mg.add_argument("source_a", metavar="<source-a>",
-                    help="first session (id, name, path, or 'auto')")
-    mg.add_argument("source_b", metavar="<source-b>",
-                    help="second session (id, name, path, or 'auto')")
-    mg.add_argument("-o", "--open", action="store_true", dest="open",
-                    help="open the merged session with 'claude --resume' after merging")
-
     sub.add_parser("log", help="show local history of remote operations",
                    description="Show the local history of push / pull / rm operations.")
 
@@ -189,18 +176,12 @@ def main(argv=None):
         elif args.cmd == "ls":
             for sid in core.ls(args.remote):
                 print(sid)
-        elif args.cmd == "merge":
-            result = core.merge(args.source_a, args.source_b)
-            print(f"merged into {result.session_id}\n"
-                  f"  resume: claude --resume {result.session_id}")
-            if args.open:
-                _open_session(result.session_id)
         elif args.cmd == "log":
             for e in core.log():
                 suffix = f" ({e['id']})" if e.get("id") else ""
                 print(f"{e.get('ts','')}  {e.get('op',''):<5} "
                       f"{e.get('remote','')}/{e.get('name','')}{suffix}")
-    except (ValueError, MergeError) as e:
+    except ValueError as e:
         print(f"weave: {e}", file=sys.stderr)
         return 1
     return 0

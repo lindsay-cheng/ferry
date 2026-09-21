@@ -59,9 +59,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# Weave local state
-.weave/merged/
-
 # Claude Code local state (worktrees, session data)
 .claude/
 
