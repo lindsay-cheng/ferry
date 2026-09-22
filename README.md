@@ -16,29 +16,29 @@ If you already have a `.weave` folder from an older install, rename it to `.ferr
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/weave/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash
 ```
 
-`install.sh` is a small bash script in this repository. The curl command downloads it and runs it in your shell. The script refuses Windows. It checks that Python 3.11+ and `git` are available. If [pipx](https://pipx.pypa.io/) is installed, it runs `pipx install --force git+https://github.com/lindsay-cheng/weave.git`. Otherwise it runs `pip install --user` with the same URL and prints the user `bin` directory to add to PATH.
+`install.sh` is a small bash script in this repository. The curl command downloads it and runs it in your shell. The script refuses Windows. It checks that Python 3.11+ and `git` are available. If [pipx](https://pipx.pypa.io/) is installed, it runs `pipx install --force git+https://github.com/lindsay-cheng/ferry.git`. Otherwise it runs `pip install --user` with the same URL and prints the user `bin` directory to add to PATH.
 
-That installs the `ferry-sessions` package, which provides the `ferry` and `ferry-hub` commands. While this repository is private, the raw GitHub URL for `install.sh` returns 404 unless the repo is public or you host the script elsewhere. If curl fails with 404, clone the repo with your normal GitHub access and run `./install.sh` from the repo root. You can also skip curl and run `pipx install git+https://github.com/lindsay-cheng/weave.git`, which uses your git credentials the same way.
+That installs the `ferry-sessions` package, which provides the `ferry` and `ferry-hub` commands. While this repository is private, the raw GitHub URL for `install.sh` returns 404 unless the repo is public or you host the script elsewhere. If curl fails with 404, clone the repo with your normal GitHub access and run `./install.sh` from the repo root. You can also skip curl and run `pipx install git+https://github.com/lindsay-cheng/ferry.git`, which uses your git credentials the same way.
 
 Checks only (no install):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/weave/main/install.sh | bash -s -- --check
+curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash -s -- --check
 ```
 
 If you prefer not to use curl, install the same package directly:
 
 ```bash
-pipx install git+https://github.com/lindsay-cheng/weave.git
+pipx install git+https://github.com/lindsay-cheng/ferry.git
 ```
 
 Without pipx:
 
 ```bash
-python3 -m pip install --user git+https://github.com/lindsay-cheng/weave.git
+python3 -m pip install --user git+https://github.com/lindsay-cheng/ferry.git
 ```
 
 Verify:
@@ -55,7 +55,7 @@ If `ferry` is not found, install pipx or add the user scripts directory to PATH.
 Re-run the curl installer, or:
 
 ```bash
-pipx install --force git+https://github.com/lindsay-cheng/weave.git
+pipx install --force git+https://github.com/lindsay-cheng/ferry.git
 ```
 
 ## Two programs

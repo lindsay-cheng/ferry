@@ -31,11 +31,11 @@ ferry = "ferry.cli:main"
 ferry-hub = "ferry.hub:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ferry"]
+packages = ["src/ferry"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/ferry",
+  "/src",
   "/fixtures",
   "/README.md",
   "/LICENSE",

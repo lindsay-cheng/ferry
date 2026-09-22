@@ -2,7 +2,7 @@
 # curl|bash installer; pipx or pip --user, no clone step
 set -euo pipefail
 
-REPO="https://github.com/lindsay-cheng/weave.git"
+REPO="https://github.com/lindsay-cheng/ferry.git"
 PKG="git+${REPO}"
 
 check_only=false
