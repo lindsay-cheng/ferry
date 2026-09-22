@@ -81,3 +81,6 @@ venv.bak/
 .Trashes
 Thumbs.db
 ehthumbs.db
+
+# Go build output
+/ferry

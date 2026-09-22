@@ -1,0 +1,3 @@
+These JSONL files are the import rewrite spec for the Go port.
+
+They come from tests/test_ferry_core.py. Do not edit them to match Go. Edit Go to match them.
