@@ -1,6 +1,6 @@
-"""Tests for weave.cli — no real ~/.claude is ever touched.
+"""Tests for ferry.cli — no real ~/.claude is ever touched.
 
-Run (from repo root):  python3 -m pytest tests/test_weave_cli.py -v
+Run (from repo root):  python3 -m pytest tests/test_ferry_cli.py -v
 """
 
 import contextlib
@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from weave import cli, config, connector as cc, core
-from weave.core import core as _core_mod
+from ferry import cli, config, connector as cc, core
+from ferry.core import core as _core_mod
 
 
 def _strip_ansi(text):
@@ -48,7 +48,7 @@ class CliBase(unittest.TestCase):
         self.repo.mkdir()
         self.src = self.repo / "src"
         self.src.mkdir()
-        self.cfg = self.repo / ".weave" / "config"
+        self.cfg = self.repo / ".ferry" / "config"
         patcher = mock.patch.dict(
             os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "claude")})
         patcher.start()
@@ -104,7 +104,7 @@ class CliTests(CliBase):
         with contextlib.redirect_stderr(err):
             rc = cli.main(["pull", "nope", "x"])
         self.assertEqual(rc, 1)
-        self.assertIn("weave:", err.getvalue())
+        self.assertIn("ferry:", err.getvalue())
 
     def test_rm_subcommand_deletes_from_remote(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
@@ -133,7 +133,7 @@ class CliTests(CliBase):
             rc = cli.main(["help"])
         self.assertEqual(rc, 0)
         text = _strip_ansi(out.getvalue())
-        self.assertIn("usage: weave", text)
+        self.assertIn("usage: ferry", text)
         self.assertIn("<name>", text)
         self.assertIn("--session", text)
         self.assertIn("[<remote>]", text)
@@ -152,21 +152,21 @@ class CliTests(CliBase):
         self.assertEqual(rendered["help"], rendered["-h"])
 
     def test_version_flag_prints_version(self):
-        from weave import __version__
+        from ferry import __version__
         for arg in ("--version", "-V"):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 rc = cli.main([arg])
             self.assertEqual(rc, 0)
             self.assertIn(__version__, out.getvalue())
-            self.assertIn("weave", out.getvalue())
+            self.assertIn("ferry", out.getvalue())
 
     def test_no_args_prints_help(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             rc = cli.main([])
         self.assertEqual(rc, 0)
-        self.assertIn("usage: weave", _strip_ansi(out.getvalue()))
+        self.assertIn("usage: ferry", _strip_ansi(out.getvalue()))
 
     def test_push_without_session_with_multiple_local_exits_1(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
@@ -299,14 +299,14 @@ class WalkUpCliTests(CliBase):
         with contextlib.redirect_stderr(err):
             rc = cli.main(["push", "n", "--session", "x"])
         self.assertEqual(rc, 1)
-        self.assertIn("not a Weave project", err.getvalue())
+        self.assertIn("not a Ferry project", err.getvalue())
 
     def test_remote_add_creates_config_in_cwd(self):
         os.chdir(self.src)
         with contextlib.redirect_stdout(io.StringIO()):
             rc = cli.main(["remote", "add", "origin", "u@h:/p"])
         self.assertEqual(rc, 0)
-        self.assertTrue((self.src / ".weave" / "config").is_file())
+        self.assertTrue((self.src / ".ferry" / "config").is_file())
 
 
 if __name__ == "__main__":

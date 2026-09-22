@@ -1,16 +1,16 @@
-"""Weave orchestrator core: push/pull Claude Code sessions, plus remote/ls.
+"""Ferry orchestrator core: push/pull Claude Code sessions, plus remote/ls.
 
 Owns ALL policy (id choice, cwd/sessionId rewrite, config resolution,
-validation). Delegates mechanics to weave.connector (byte I/O),
-weave.config (remote resolution), and the `weave.remote` collaborator (byte
+validation). Delegates mechanics to ferry.connector (byte I/O),
+ferry.config (remote resolution), and the `ferry.remote` collaborator (byte
 transport to an HTTP folder hub). Stdlib only here; HTTP lives behind
-`weave.remote`.
+`ferry.remote`.
 
 Data pipeline for the remote operations:
 
-    hub folder <--HTTP--> weave.remote --text--> weave.core
+    hub folder <--HTTP--> ferry.remote --text--> ferry.core
 
-`weave.remote` moves raw transcript text keyed by (url, name); this
+`ferry.remote` moves raw transcript text keyed by (url, name); this
 module applies every machine-specific policy (fresh id, cwd/sessionId rewrite)
 before writing anything locally.
 """
@@ -22,12 +22,12 @@ import uuid
 import warnings
 from datetime import datetime, timezone
 
-from weave import config
-from weave import connector as cc
+from ferry import config
+from ferry import connector as cc
 
 
-class WeaveError(ValueError):
-    """Any weave-layer error (unknown remote, empty history, remote transport)."""
+class FerryError(ValueError):
+    """Any ferry-layer error (unknown remote, empty history, remote transport)."""
 
 
 # --- config ------------------------------------------------------------------
@@ -36,13 +36,13 @@ def remote_add(name, url, *, path=None):
 
 
 def _project_cwd(cwd, config_path):
-    """Chat folder when caller omits ``cwd``: the Weave project root."""
+    """Chat folder when caller omits ``cwd``: the Ferry project root."""
     if cwd is not None:
         return cwd
     try:
         return str(config.project_dir(path=config_path))
     except ValueError as e:
-        raise WeaveError(str(e)) from e
+        raise FerryError(str(e)) from e
 
 
 def _resolve_remote(remote, *, path=None):
@@ -51,51 +51,51 @@ def _resolve_remote(remote, *, path=None):
     When ``remote`` is given it is returned as-is. When it is ``None`` (caller
     omitted it) and exactly one remote is configured, that remote's name is used
     -- so a single-remote setup never has to name it. Zero or many configured
-    remotes make the choice ambiguous, which is a ``WeaveError``.
+    remotes make the choice ambiguous, which is a ``FerryError``.
     """
     if remote is not None:
         return remote
     try:
         names = [name for name, _ in config.list_remotes(path=path)]
     except ValueError as e:
-        raise WeaveError(str(e)) from e
+        raise FerryError(str(e)) from e
     if len(names) == 1:
         return names[0]
     if not names:
-        raise WeaveError("no remote configured — run: weave remote add <name> <url>")
-    raise WeaveError(
+        raise FerryError("no remote configured — run: ferry remote add <name> <url>")
+    raise FerryError(
         f"multiple remotes configured ({', '.join(sorted(names))}); specify one")
 
 
 def _remote_url(remote, *, path=None):
-    """Resolve a remote name to its url, as a WeaveError on failure.
+    """Resolve a remote name to its url, as a FerryError on failure.
 
-    Thin orchestrator-level adapter over :func:`weave.config.get_remote` so
-    every weave-layer error shares the ``WeaveError`` (``ValueError``) base.
+    Thin orchestrator-level adapter over :func:`ferry.config.get_remote` so
+    every ferry-layer error shares the ``FerryError`` (``ValueError``) base.
     """
     try:
         return config.get_remote(remote, path=path)
     except ValueError as e:
-        raise WeaveError(str(e)) from e
+        raise FerryError(str(e)) from e
 
 
 def _load_server():
-    return importlib.import_module("weave.remote")
+    return importlib.import_module("ferry.remote")
 
 
 def _remote_call(fn, *args, action, target):
-    """Invoke a `weave.remote` transport call, mapping any failure to WeaveError.
+    """Invoke a `ferry.remote` transport call, mapping any failure to FerryError.
 
     Keeps the original (actionable) message from the transport layer -- e.g.
     missing credentials or an absent remote session -- while tagging it with
-    what was being attempted so the CLI surfaces a clear `weave: ...` line.
+    what was being attempted so the CLI surfaces a clear `ferry: ...` line.
     """
     try:
         return fn(*args)
-    except WeaveError:
+    except FerryError:
         raise
     except ValueError as e:
-        raise WeaveError(f"{action} {target}: {e}") from e
+        raise FerryError(f"{action} {target}: {e}") from e
 
 
 # --- session / log helpers ---------------------------------------------------
@@ -110,7 +110,7 @@ def _resolve_session(session, cwd):
     """Return an explicit session id, or pick the sole local session for `cwd`.
 
     When ``session`` is ``None`` (caller omitted it): one local chat for
-    ``cwd`` is used; zero or many are ``WeaveError``s that name the folder
+    ``cwd`` is used; zero or many are ``FerryError``s that name the folder
     and list ids when ambiguous.
     """
     if session is not None:
@@ -119,11 +119,11 @@ def _resolve_session(session, cwd):
     if len(ids) == 1:
         return ids[0]
     if not ids:
-        raise WeaveError(
+        raise FerryError(
             f"no local Claude sessions for {cwd!r} — "
             f"run Claude Code from that folder first")
     listed = ", ".join(ids)
-    raise WeaveError(
+    raise FerryError(
         f"multiple local sessions for {cwd!r} ({listed}); pass --session <id>")
 
 
@@ -163,7 +163,7 @@ def log(*, config_path=None):
     try:
         entries = config.read_log(path=config_path)
     except ValueError as e:
-        raise WeaveError(str(e)) from e
+        raise FerryError(str(e)) from e
     return list(reversed(entries))
 
 
@@ -191,7 +191,7 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
     """Download `name` from `remote` into a fresh local session.
 
     `remote` may be ``None`` to use the sole configured remote. Pipeline:
-    weave.remote.pull -> per-line cwd/sessionId rewrite -> connector write.
+    ferry.remote.pull -> per-line cwd/sessionId rewrite -> connector write.
     Validates (unknown/ambiguous remote, transport failure, empty history) and
     fails before any local write.
     """
@@ -217,7 +217,7 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
             continue
         out.append(rewritten)
     if not out:
-        raise WeaveError(f"session {name!r} has no chat history")
+        raise FerryError(f"session {name!r} has no chat history")
     cc.write_text(cc.session_path(cwd, new_id), "".join(out))
     _log_op("pull", remote, name, new_id, path=config_path)
     return new_id

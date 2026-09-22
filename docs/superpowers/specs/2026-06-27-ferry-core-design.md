@@ -1,18 +1,18 @@
-# Weave core orchestrator (`weave.py`) — design
+# Ferry core orchestrator (`ferry.py`) — design
 
 - **Date:** 2026-06-27
 - **Status:** Approved design, ready for implementation planning
-- **Scope:** One module — the `weave` orchestrator + CLI implementing **push**, **pull**,
+- **Scope:** One module — the `ferry` orchestrator + CLI implementing **push**, **pull**,
   **merge**, plus the supporting **remote add** and **ls** commands.
 - **Out of scope:** The `server` module (byte transport to/from a remote) and the `merge`
-  module (Cerebras-backed content merge). This spec *defines the interfaces weave calls*
+  module (Cerebras-backed content merge). This spec *defines the interfaces ferry calls*
   on them; those modules are built separately and shaped around these signatures.
 
 ---
 
 ## 1. Purpose
 
-`weave.py` is the orchestrator that turns the dumb I/O boundary (`claude_connector.py`)
+`ferry.py` is the orchestrator that turns the dumb I/O boundary (`claude_connector.py`)
 and the pure in-memory transcript engine (`transcript_api.py`) into real user-facing
 operations on Claude Code sessions. It owns **all policy**: which local session is
 "current", what session id a new file gets, which fields are rewritten for the local
@@ -21,7 +21,7 @@ machine, and the accept/refuse decision when a collaborator returns bad data.
 ## 2. Layering & boundaries
 
 ```
-weave.py  (CLI + orchestration — THIS spec)
+ferry.py  (CLI + orchestration — THIS spec)
    │   owns ALL logic: id choice, cwd/sessionId rewrite, current-session rule,
    │   config resolution, validation/refuse-to-write
    ├── claude_connector   reads/writes session JSONL bytes by id/path        [built]
@@ -34,12 +34,12 @@ Design rules carried over from the connector spec:
 
 - `server` never parses JSON — it is pure byte transport keyed by `(url, name)`.
 - `merge` never touches `cwd` / `sessionId` / ids / the filesystem — it produces merged
-  *content* only; weave does every field rewrite and the write, exactly as it does on a
+  *content* only; ferry does every field rewrite and the write, exactly as it does on a
   `pull`.
-- weave never decodes an encoded project dir; it only ever *encodes* a known `cwd`
+- ferry never decodes an encoded project dir; it only ever *encodes* a known `cwd`
   (via the connector), so the lossy-path problem cannot arise.
 
-### Interfaces weave calls (so the future modules can be shaped around them)
+### Interfaces ferry calls (so the future modules can be shaped around them)
 
 ```python
 # server module — pure byte transport keyed by (url, name); no JSONL awareness
@@ -47,7 +47,7 @@ server.push(url: str, name: str, text: str) -> None
 server.pull(url: str, name: str) -> str            # raises if name absent
 server.list(url: str) -> list[str]                 # session names on the remote
 
-# merge module — content-only; weave does all field rewriting & writing afterward
+# merge module — content-only; ferry does all field rewriting & writing afterward
 merge.merge(target: list[dict], source: list[dict]) -> list[dict]
 ```
 
@@ -55,7 +55,7 @@ merge.merge(target: list[dict], source: list[dict]) -> list[dict]
 
 1. **CLI surface (this pass):** `push`, `pull`, `merge`, `remote add`, `ls`.
 2. **Current session:** there is no magic. `push` and `merge`-target require an explicit
-   `--session <id>`; `weave ls` is how the user finds the id.
+   `--session <id>`; `ferry ls` is how the user finds the id.
 3. **Pull identity:** generate a **fresh local uuid** for the new file, and rewrite every
    entry's `cwd` to the local encoded path **and** `sessionId` to the new id. Re-pulling
    produces a new file each time; no collisions.
@@ -65,14 +65,14 @@ merge.merge(target: list[dict], source: list[dict]) -> list[dict]
    The remote `pull` is a separate prior step; merge never touches the network.
 6. **Merge output:** written to a **fresh local id**; source and target files are **never
    modified**, so no backup/snapshot is required (copy-on-write at the file level).
-7. **Remote config:** project-local `.weave/config` (INI), committed to the repo, in the
+7. **Remote config:** project-local `.ferry/config` (INI), committed to the repo, in the
    README's shape: `[remote "<name>"] url = <url>`.
 8. **Local cwd:** the process working directory (`os.getcwd()`); pulled/merged sessions
    land in the project dir for that cwd.
 
 ## 4. Internal helpers
 
-- `_read_config() -> ConfigParser` / `_remote_url(name) -> str` — parse `.weave/config`;
+- `_read_config() -> ConfigParser` / `_remote_url(name) -> str` — parse `.ferry/config`;
   resolve a remote name to its url, raising a clear `ValueError` if the name is unknown.
 - `_rewrite_for_local(entries: list[dict], new_id: str) -> list[dict]` — the shared
   "make it mine" step used by both pull and merge-output: set every entry's `cwd` to the
@@ -83,12 +83,12 @@ merge.merge(target: list[dict], source: list[dict]) -> list[dict]
 
 All operations validate and fail **before** any local write.
 
-### `weave push <remote> <name> --session <id>`
+### `ferry push <remote> <name> --session <id>`
 1. `connector.read_text(id)` → raw text (propagates `SessionNotFound` / `AmbiguousSession`).
 2. `server.push(_remote_url(remote), name, text)` — bytes unchanged.
 3. Print confirmation (`pushed <id> → <remote>/<name>`).
 
-### `weave pull <remote> <name>`
+### `ferry pull <remote> <name>`
 1. `text = server.pull(_remote_url(remote), name)`.
 2. `entries = transcript_api.from_text(text)`; if empty → warn and **exit before writing**.
 3. `new_id = _new_id()`; `entries = _rewrite_for_local(entries, new_id)`.
@@ -97,7 +97,7 @@ All operations validate and fail **before** any local write.
    `connector.write_text(path, out)`.
 5. Print the new local id and the `claude --resume <new_id>` hint.
 
-### `weave merge <source-id> --session <target-id>`
+### `ferry merge <source-id> --session <target-id>`
 1. Read both locally via `connector.read_text` → `transcript_api.from_text` each.
    Empty either side → warn and **exit before writing**.
 2. `merged = merge.merge(target_entries, source_entries)`.
@@ -108,11 +108,11 @@ All operations validate and fail **before** any local write.
    **Source and target files are never touched.**
 6. Print the new id and the resume hint.
 
-### `weave remote add <name> <url>`
-- `mkdir -p .weave/`; write/update `[remote "<name>"] url = <url>` in `.weave/config`.
+### `ferry remote add <name> <url>`
+- `mkdir -p .ferry/`; write/update `[remote "<name>"] url = <url>` in `.ferry/config`.
   A second add for the same name updates the url.
 
-### `weave ls [remote]`
+### `ferry ls [remote]`
 - No remote → local sessions for the current cwd: filter `connector.list_sessions()` to the
   encoded-cwd project dir, print each id with a cheap summary (turn count and/or mtime).
 - With a remote → `server.list(_remote_url(remote))`.
@@ -124,8 +124,8 @@ All operations validate and fail **before** any local write.
   `cmd_*(args)` function that marshals arguments and calls a corresponding **library
   function** (`push()`, `pull()`, `merge()`, `remote_add()`, `ls()`).
 - Library functions take plain arguments and are unit-testable without spawning a process.
-- `main` catches `ValueError` (the shared base across connector, transcript, and weave
-  errors), prints `weave: <message>` to stderr, and returns exit code `1`.
+- `main` catches `ValueError` (the shared base across connector, transcript, and ferry
+  errors), prints `ferry: <message>` to stderr, and returns exit code `1`.
 
 ## 7. Error handling
 
@@ -133,11 +133,11 @@ All cases fail **before** local writes.
 
 | Case | Behavior |
 |------|----------|
-| Unknown remote name | `ValueError` → `no remote '<name>'; add it with 'weave remote add'`. |
+| Unknown remote name | `ValueError` → `no remote '<name>'; add it with 'ferry remote add'`. |
 | Local session id not found / ambiguous | propagate connector's `SessionNotFound` / `AmbiguousSession`. |
 | Empty / no chat history (pull or merge input) | warn and exit before writing anything. |
-| Server unreachable / remote name absent | `server` raises; weave surfaces it; nothing written locally. |
-| Merge returns empty / non-list | weave refuses to write, surfaces the bad output. |
+| Server unreachable / remote name absent | `server` raises; ferry surfaces it; nothing written locally. |
+| Merge returns empty / non-list | ferry refuses to write, surfaces the bad output. |
 
 ## 8. Testing strategy
 
@@ -155,12 +155,12 @@ collaborators are replaced with in-test fakes (no network, no Cerebras).
 - **remote add / `_read_config`:** INI round-trip; a second add updates the url.
 - **ls:** local enumeration filtered to the cwd; remote form delegates to the fake server.
 - **main / CLI:** arg parsing per subcommand; a raised `ValueError` → exit code 1 and a
-  `weave: …` stderr message.
+  `ferry: …` stderr message.
 
 ## 9. Future considerations (not now)
 
 - `fork`, `resume`, `show`, and multi-session `--into` disambiguation from the README.
 - The merge **reprompt loop** (re-run with user feedback on reject) — orchestrated by the
-  weave CLI around `merge.merge` once interactive UX is in scope.
+  ferry CLI around `merge.merge` once interactive UX is in scope.
 - Remote **snapshot-before-merge** safety, if merge ever overwrites in place instead of
   writing a fresh id.

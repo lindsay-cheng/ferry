@@ -1,4 +1,4 @@
-# Weave transcript engine — linear simplification
+# Ferry transcript engine — linear simplification
 
 - **Date:** 2026-06-27
 - **Status:** Approved design, pre-implementation
@@ -11,7 +11,7 @@
 
 ## 1. Context & problem
 
-`transcript.py` is the CRUD engine behind weave's `edit <session>` capability: it
+`transcript.py` is the CRUD engine behind ferry's `edit <session>` capability: it
 edits a Claude Code transcript (JSONL, one entry per line, entries linked into a
 **tree** by `parentUuid → uuid`). `transcipt_api.py` is a thin public façade over it.
 

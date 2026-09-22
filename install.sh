@@ -12,7 +12,7 @@ fi
 
 case "$(uname -s)" in
   Darwin|Linux) ;;
-  *) echo "weave install supports macOS and Linux only"; exit 1 ;;
+  *) echo "ferry install supports macOS and Linux only"; exit 1 ;;
 esac
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -37,10 +37,10 @@ fi
 
 if command -v pipx >/dev/null 2>&1; then
   pipx install --force "$PKG"
-  echo "installed weave (pipx). run: weave help"
+  echo "installed ferry (pipx). run: ferry help"
 else
   python3 -m pip install --user "$PKG"
   bindir="$(python3 -m site --user-base)/bin"
-  echo "installed weave. add to PATH if needed: export PATH=\"${bindir}:\$PATH\""
-  echo "then run: weave help"
+  echo "installed ferry. add to PATH if needed: export PATH=\"${bindir}:\$PATH\""
+  echo "then run: ferry help"
 fi

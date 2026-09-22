@@ -1,13 +1,13 @@
-"""Remote transport for weave: HTTP hub, files keyed by name.
+"""Remote transport for ferry: HTTP hub, files keyed by name.
 
 The "pure byte transport" boundary: move raw session JSONL text to/from a
 hub, keyed by ``(url, name)``. It never parses JSON, rewrites fields, or
-chooses session ids -- that all lives in ``weave.core``.
+chooses session ids -- that all lives in ``ferry.core``.
 
-``url`` is the hub address from ``.weave/config`` (e.g. ``http://localhost:8080``).
-The shared password comes from ``WEAVE_HUB_PASSWORD`` (never from config).
+``url`` is the hub address from ``.ferry/config`` (e.g. ``http://localhost:8080``).
+The shared password comes from ``FERRY_HUB_PASSWORD`` (never from config).
 
-Public surface (the contract ``weave.core`` calls):
+Public surface (the contract ``ferry.core`` calls):
     push(url, name, text) -> None
     pull(url, name) -> str      # raises ServerError if absent
     list(url) -> list[str]
@@ -23,19 +23,19 @@ from pathlib import Path
 
 _list_type = list  # builtin; ``list()`` below shadows the name
 
-_ENV = "WEAVE_HUB_PASSWORD"
+_ENV = "FERRY_HUB_PASSWORD"
 _TIMEOUT = 60
 _dotenv_loaded = False
 
 
 def ensure_dotenv_loaded():
-    """Load KEY=value lines from a `.env` (cwd, or WEAVE_ENV_FILE) once."""
+    """Load KEY=value lines from a `.env` (cwd, or FERRY_ENV_FILE) once."""
     global _dotenv_loaded
     if _dotenv_loaded:
         return
     _dotenv_loaded = True
     candidates = [Path.cwd() / ".env"]
-    env_file = os.environ.get("WEAVE_ENV_FILE")
+    env_file = os.environ.get("FERRY_ENV_FILE")
     if env_file:
         candidates.append(Path(env_file))
     for path in candidates:
@@ -57,7 +57,7 @@ def ensure_dotenv_loaded():
 class ServerError(ValueError):
     """Any remote-transport failure (missing password, absent session, hub error).
 
-    Subclasses ``ValueError`` so ``weave.core``'s ``except ValueError`` catches it.
+    Subclasses ``ValueError`` so ``ferry.core``'s ``except ValueError`` catches it.
     """
 
 

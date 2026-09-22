@@ -1,6 +1,6 @@
 """Stdlib HTTP hub: named chats as files in a folder.
 
-One shared password from ``WEAVE_HUB_PASSWORD``. Names are letters, numbers,
+One shared password from ``FERRY_HUB_PASSWORD``. Names are letters, numbers,
 and hyphen, stored lowercase. Same name twice is an error. Do not point
 ``--dir`` at ``~/.claude``.
 """
@@ -19,7 +19,7 @@ from urllib.parse import unquote, urlparse
 _NAME_RE = re.compile(r"[a-z0-9-]+")
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8080
-_ENV = "WEAVE_HUB_PASSWORD"
+_ENV = "FERRY_HUB_PASSWORD"
 
 
 def normalize_name(name):
@@ -149,10 +149,10 @@ def make_server(data_dir, password, host=_DEFAULT_HOST, port=_DEFAULT_PORT):
 
 def main(argv=None):
     p = argparse.ArgumentParser(
-        prog="weave-hub",
+        prog="ferry-hub",
         description=(
             "Serve a folder of named chats over HTTP. "
-            "Set WEAVE_HUB_PASSWORD. Default http://127.0.0.1:8080. "
+            "Set FERRY_HUB_PASSWORD. Default http://127.0.0.1:8080. "
             "Names are letters, numbers, and hyphen; stored lowercase."
         ),
     )
@@ -164,11 +164,11 @@ def main(argv=None):
     # hub reads the process env; the CLI autoloads .env
     password = os.environ.get(_ENV, "")
     if not password:
-        print(f"weave-hub: set {_ENV}", file=sys.stderr)
+        print(f"ferry-hub: set {_ENV}", file=sys.stderr)
         return 1
     httpd = make_server(args.dir, password, args.host, args.port)
     print(
-        f"weave-hub: http://{args.host}:{httpd.server_port}  "
+        f"ferry-hub: http://{args.host}:{httpd.server_port}  "
         f"dir={Path(args.dir).resolve()}",
         flush=True,
     )

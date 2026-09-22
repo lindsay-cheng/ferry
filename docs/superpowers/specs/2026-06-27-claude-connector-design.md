@@ -18,7 +18,7 @@ The connector is what lets higher layers act on *real* sessions.
 ## 2. Layering
 
 ```
-weave (orchestrator — NOT in this spec)
+ferry (orchestrator — NOT in this spec)
    │   owns ALL logic: cwd/sessionId rewrite, session-id choice,
    │   fork / merge / handoff semantics
    ├── claude_connector_api   ── dumb I/O: session-id ↔ path, read bytes, write bytes
@@ -26,18 +26,18 @@ weave (orchestrator — NOT in this spec)
 ```
 
 The connector **never** parses JSON, **never** rewrites fields, and **never** chooses a
-session id. weave reads via the connector, edits via the core, and writes back via the
+session id. ferry reads via the connector, edits via the core, and writes back via the
 connector.
 
 ## 3. Non-goals (explicitly out of scope)
 
 - No JSON / entry parsing (callers use `transcript_api.from_text` / `to_text`).
-- No field rewriting (`cwd`, `sessionId`, `gitBranch`, `version`, …) — that is weave's job.
-- No session-id generation — weave decides ids and builds the destination path via
+- No field rewriting (`cwd`, `sessionId`, `gitBranch`, `version`, …) — that is ferry's job.
+- No session-id generation — ferry decides ids and builds the destination path via
   `session_path(...)`.
 - No resume-correctness guarantees about *content* — only that a write is not left
   half-finished on disk (see §6, atomic writes).
-- No network / SSH / WeaveHub (a separate future module).
+- No network / SSH / FerryHub (a separate future module).
 
 ## 4. Platform assumptions
 
@@ -82,14 +82,14 @@ so callers can `except ValueError` for "any connector error."
   a known `cwd`. Because the module only ever encodes (and never tries to reverse the lossy
   `-` encoding), the well-known lossy-path problem cannot arise here.
 - **Crash-safe writes.** Atomic `os.replace` means an interrupted write never leaves a
-  half-written / corrupt session on disk, even though resume-correctness logic lives in weave.
+  half-written / corrupt session on disk, even though resume-correctness logic lives in ferry.
 
-## 7. How weave composes it (illustrative; not implemented here)
+## 7. How ferry composes it (illustrative; not implemented here)
 
 ```python
 text    = claude_connector_api.read_text(src_id)              # connector
 entries = transcript_api.from_text(text)                  # core
-# ... weave rewrites cwd / sessionId, picks a new id ...
+# ... ferry rewrites cwd / sessionId, picks a new id ...
 out     = transcript_api.to_text(entries)                 # core
 path    = claude_connector_api.session_path(local_cwd, new_id)  # connector
 claude_connector_api.write_text(path, out)                    # connector
@@ -115,13 +115,13 @@ test style.
 
 1. **Addressing:** session id, resolved by global glob over `projects_root()/*/<id>.jsonl`.
 2. **Responsibility:** connector is dumb I/O; all field-rewriting / id-choice / handoff logic
-   lives in weave.
+   lives in ferry.
 3. **Currency:** raw text + paths (no dependency on the transcript core).
 4. **Duplicate id on `resolve`:** raise `AmbiguousSession` (do not silently pick one).
 5. **Module name:** `claude_connector_api.py`.
 
 ## 10. Future considerations (not now)
 
-- A `remote` module (SSH push/pull, WeaveHub) reuses the same path mechanics.
+- A `remote` module (SSH push/pull, FerryHub) reuses the same path mechanics.
 - If callers frequently want entries rather than text, a thin convenience wrapper can live in
-  weave — not in the connector, to keep it decoupled.
+  ferry — not in the connector, to keep it decoupled.

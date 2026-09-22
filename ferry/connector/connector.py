@@ -2,7 +2,7 @@
 
 A dumb I/O boundary: translate a Claude Code session id <-> a file path on a
 unix ~/.claude, and move bytes in and out of those paths. No JSON parsing, no
-field rewriting, no session-id generation -- those live in the weave layer.
+field rewriting, no session-id generation -- those live in the ferry layer.
 
 Storage base honors $CLAUDE_CONFIG_DIR if set, else ~/.claude. Stdlib only.
 """

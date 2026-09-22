@@ -1,4 +1,4 @@
-# Weave merge: shared-prefix detection + transcript rewrite
+# Ferry merge: shared-prefix detection + transcript rewrite
 
 **Date:** 2026-06-27
 **Status:** Approved design, pending implementation plan
@@ -8,11 +8,11 @@
 
 ## Problem
 
-`weave merge` today does not produce a resumable session. `core.merge_contexts(source_a, source_b)`:
+`ferry merge` today does not produce a resumable session. `core.merge_contexts(source_a, source_b)`:
 
 1. Distills each JSONL independently into a `ChatContext` (a semantic snapshot; raw message/uuid structure is discarded).
 2. Makes one Cerebras call that dumps both `ChatContext`s as JSON and asks for one `MergedContext` back.
-3. Writes a sidecar JSON to `.weave/merged/<id>.json`, explicitly flagged `claude_jsonl_compatible: false`.
+3. Writes a sidecar JSON to `.ferry/merged/<id>.json`, explicitly flagged `claude_jsonl_compatible: false`.
 
 There is no shared-prefix detection, no A-branch / B-branch separation, and no JSONL rewrite. The output cannot be resumed with `claude --resume`.
 
@@ -43,7 +43,7 @@ Both source sessions are left untouched (non-destructive).
 | Match rule | **Longest common prefix on content equality.** Compare role + textual content (and tool name/input/result for tool cycles), ignoring `uuid`/`parentUuid`/`sessionId`/`cwd`/`timestamp`. Stop at the first mismatch; that is the branch point. |
 | Payload form | **Branches raw, shared distilled.** A-branch and B-branch are sent as raw transcript turns; the shared prefix is sent as a compact distilled summary for background. |
 | Output shape | **Single briefing document (text).** Cerebras returns one prose/markdown briefing. No schema, no validator. |
-| Injection | The briefing text is passed **as the `result` parameter** of a `tool_call` spec to `weave.transcript`'s create function. No file is written; `transcript` builds the `tool_use` + `tool_result` pair with the briefing in the result. |
+| Injection | The briefing text is passed **as the `result` parameter** of a `tool_call` spec to `ferry.transcript`'s create function. No file is written; `transcript` builds the `tool_use` + `tool_result` pair with the briefing in the result. |
 | Merge-layer boundary | **Cerebras is pure / read-only.** It receives the three context pieces and returns briefing text. All I/O and transcript editing live in `core`. |
 | Clone base | **Either side works** (the shared prefix is content-identical). Default to `source_a` for identity. |
 | Empty shared prefix | **Leave it empty.** When the two sessions never overlapped, the clone is just the spliced-in Read cycle. No synthetic seed turn, no error. |
@@ -56,17 +56,17 @@ Both source sessions are left untouched (non-destructive).
 ```
 core.merge(source_a, source_b)
   │
-  ├─ from_text(A), from_text(B)                         # weave.transcript → linear entry lists
+  ├─ from_text(A), from_text(B)                         # ferry.transcript → linear entry lists
   ├─ _split_at_branch(A, B) on CONTENT                  # role+text+tool name/input/result; ignore volatile fields
   │     → branch_point_uuid (or None), a_tail, b_tail
   │
-  ├─ briefing = merger.merge(distill(shared), a_tail, b_tail)   # weave.merge — PURE, returns text
+  ├─ briefing = merger.merge(distill(shared), a_tail, b_tail)   # ferry.merge — PURE, returns text
   │
   ├─ clone = A (in memory; disk untouched)              # core owns all I/O
   │     ├─ delete_between(a_tail[0].uuid, A[-1].uuid)   # drop A's branch (if a_tail non-empty)
   │     └─ create_after(branch_point_uuid, spec)        # or create_at_start when prefix empty
   │           spec = {"type":"tool_call","name":"Read",
-  │                   "input":{"file_path":"weave-merged-context"},
+  │                   "input":{"file_path":"ferry-merged-context"},
   │                   "result": briefing}
   │
   ├─ new_id = _new_id();  entries = _rewrite_for_local(entries, new_id, cwd)
@@ -77,27 +77,27 @@ core.merge(source_a, source_b)
 
 | Module | Change | Responsibility |
 |--------|--------|----------------|
-| `weave.merge` | Repurpose | `ContextMerger.merge(shared, a_branch, b_branch) -> str` returns briefing text. `CerebrasMerger` builds a briefing prompt, calls the client, returns prose. `StubMerger` returns deterministic briefing text. `prompt.build_merge_prompt` rewritten to request one briefing document. |
-| `weave.core` | Replace | New `merge()` owns LCP detection, the clone + Read-cycle splice, identity rewrite, and the write. |
-| `weave.transcript` | None | Consumed as-is: `from_text`, `read_all`, `delete_between`, `create_after` / `create_at_start`, `to_text`. |
-| `weave.connector` | None | `read_text`, `session_path`, `write_text`. |
-| `weave.cli` | Adjust | `merge` subcommand drops `--output-dir`; prints the new session id and a `claude --resume <id>` hint (mirrors `pull`). |
+| `ferry.merge` | Repurpose | `ContextMerger.merge(shared, a_branch, b_branch) -> str` returns briefing text. `CerebrasMerger` builds a briefing prompt, calls the client, returns prose. `StubMerger` returns deterministic briefing text. `prompt.build_merge_prompt` rewritten to request one briefing document. |
+| `ferry.core` | Replace | New `merge()` owns LCP detection, the clone + Read-cycle splice, identity rewrite, and the write. |
+| `ferry.transcript` | None | Consumed as-is: `from_text`, `read_all`, `delete_between`, `create_after` / `create_at_start`, `to_text`. |
+| `ferry.connector` | None | `read_text`, `session_path`, `write_text`. |
+| `ferry.cli` | Adjust | `merge` subcommand drops `--output-dir`; prints the new session id and a `claude --resume <id>` hint (mirrors `pull`). |
 
 ### Code retired (option A)
 
-- `weave/merge/types.py`: `MergedContext`, `MergedDecision`, `Conflict`, `SourceRef` (the whole semantic-merge schema).
-- `weave/merge/validator.py` (validates `MergedContext`).
-- `weave/merge/parse.py` (parses the JSON merged response).
-- `weave/merge/prompt.py`: the `_MERGE_OUTPUT_SCHEMA` block.
-- `weave/core/core.py`: `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path` (if unused after), `_DEFAULT_MERGED_DIR`, `_WEAVE_MERGE_VERSION`, `_COMPATIBILITY_NOTE`, and the old sidecar `MergeResult` shape.
+- `ferry/merge/types.py`: `MergedContext`, `MergedDecision`, `Conflict`, `SourceRef` (the whole semantic-merge schema).
+- `ferry/merge/validator.py` (validates `MergedContext`).
+- `ferry/merge/parse.py` (parses the JSON merged response).
+- `ferry/merge/prompt.py`: the `_MERGE_OUTPUT_SCHEMA` block.
+- `ferry/core/core.py`: `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path` (if unused after), `_DEFAULT_MERGED_DIR`, `_FERRY_MERGE_VERSION`, `_COMPATIBILITY_NOTE`, and the old sidecar `MergeResult` shape.
 
-**Kept in `weave.merge`:** `client.py`, `env.py`, `factory.py`, `exceptions.py`.
+**Kept in `ferry.merge`:** `client.py`, `env.py`, `factory.py`, `exceptions.py`.
 
 ### Affected files (for the implementation plan)
 
-Runtime: `weave/merge/__init__.py`, `weave/merge/protocols.py`, `weave/merge/cerebras.py`, `weave/merge/stub.py`, `weave/merge/prompt.py`, `weave/merge/types.py`, `weave/merge/validator.py`, `weave/merge/parse.py`, `weave/core/__init__.py`, `weave/core/core.py`, `weave/cli/cli.py`.
+Runtime: `ferry/merge/__init__.py`, `ferry/merge/protocols.py`, `ferry/merge/cerebras.py`, `ferry/merge/stub.py`, `ferry/merge/prompt.py`, `ferry/merge/types.py`, `ferry/merge/validator.py`, `ferry/merge/parse.py`, `ferry/core/__init__.py`, `ferry/core/core.py`, `ferry/cli/cli.py`.
 
-Tests/fixtures: `tests/merge_test_fixtures.py`, `tests/test_merge_pipeline.py`, `tests/test_merge_types.py`, `tests/test_merge_e2e.py`, `tests/test_cerebras_integration.py`, `tests/test_weave_cli.py`.
+Tests/fixtures: `tests/merge_test_fixtures.py`, `tests/test_merge_pipeline.py`, `tests/test_merge_types.py`, `tests/test_merge_e2e.py`, `tests/test_cerebras_integration.py`, `tests/test_ferry_cli.py`.
 
 ---
 
@@ -158,7 +158,7 @@ class MergeResult:
 
 ### CLI
 
-`weave merge <source_a> <source_b>` → on success prints:
+`ferry merge <source_a> <source_b>` → on success prints:
 
 ```
 merged into <new_id>
@@ -171,9 +171,9 @@ merged into <new_id>
 
 | Case | Behavior |
 |------|----------|
-| Source id/path missing or ambiguous | `connector` raises `SessionNotFound` / `AmbiguousSession` (subclass `ValueError`) → core wraps as `WeaveError`, before any write. |
-| Both transcripts empty | `WeaveError("no chat history")`. |
-| Identical transcripts (both tails empty) | `WeaveError("sessions are identical; nothing to merge")`. |
+| Source id/path missing or ambiguous | `connector` raises `SessionNotFound` / `AmbiguousSession` (subclass `ValueError`) → core wraps as `FerryError`, before any write. |
+| Both transcripts empty | `FerryError("no chat history")`. |
+| Identical transcripts (both tails empty) | `FerryError("sessions are identical; nothing to merge")`. |
 | Cerebras unreachable / no API key | merge-layer error (`MergeClientError`) propagates; nothing written. |
 | Empty / blank briefing returned | `MergeResponseError`; nothing written. |
 | Empty shared prefix | Allowed. Clone is just the Read cycle (`create_at_start`). |
@@ -194,7 +194,7 @@ When the shared prefix is empty, the merged transcript begins with an assistant 
   - the shared prefix is preserved verbatim,
   - exactly one `Read` tool cycle is present, carrying the stub briefing in its `tool_result`,
   - every entry's `cwd` and `sessionId` are rewritten and a fresh `session_id` is used,
-  - the output round-trips through `weave.transcript` as a single valid linear chain (resumable).
+  - the output round-trips through `ferry.transcript` as a single valid linear chain (resumable).
 - **Cerebras path:** mocked client returns a canned briefing; assert it lands in the `tool_result`.
 - **Edge — empty prefix:** merged file is just the Read cycle.
 - **Integration:** keep the single real-Cerebras test gated behind `CEREBRAS_API_KEY`, adapted to assert briefing text instead of a `MergedContext`.
@@ -205,4 +205,4 @@ Fixtures referencing `MergedContext` (`tests/merge_test_fixtures.py`, `tests/tes
 
 ## Follow-up (out of this spec)
 
-The README still documents the old SSH-based WeaveHub and the sidecar merge. After this lands, the README "Merge pipeline" / "Write" stage and error-handling rows should be updated to describe the resumable-clone behavior. Tracked separately from this implementation.
+The README still documents the old SSH-based FerryHub and the sidecar merge. After this lands, the README "Merge pipeline" / "Write" stage and error-handling rows should be updated to describe the resumable-clone behavior. Tracked separately from this implementation.

@@ -1,11 +1,11 @@
-"""Tests for weave.core -- no real ~/.claude is touched.
+"""Tests for ferry.core -- no real ~/.claude is touched.
 
 Two layers of coverage:
   * policy branches via an injected in-memory `server` fake (fast, no transport);
   * an end-to-end path that drives core.push/pull/ls through the REAL
-    weave.remote against a localhost hub writing a temp folder.
+    ferry.remote against a localhost hub writing a temp folder.
 
-Run (from repo root):  python3 -m pytest tests/test_weave_core.py
+Run (from repo root):  python3 -m pytest tests/test_ferry_core.py
 """
 
 import json
@@ -17,10 +17,10 @@ import warnings
 from pathlib import Path
 from unittest import mock
 
-from weave import config, connector as cc, core
-from weave.core import core as _core_mod
-from weave.hub import make_server
-from weave.remote import remote as _remote_server
+from ferry import config, connector as cc, core
+from ferry.core import core as _core_mod
+from ferry.hub import make_server
+from ferry.remote import remote as _remote_server
 
 _VALID_ENTRY = (
     '{"parentUuid":null,"type":"user","uuid":"u1",'
@@ -37,7 +37,7 @@ _EXTRA_TYPES_TEXT = (
 )
 
 
-class _WeaveBase(unittest.TestCase):
+class _FerryBase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -46,15 +46,15 @@ class _WeaveBase(unittest.TestCase):
             os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "claude")})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.cfg = self.tmp / ".weave" / "config"
+        self.cfg = self.tmp / ".ferry" / "config"
         self.cwd = "/Users/tester/proj"
 
 
-class ConfigTests(_WeaveBase):
+class ConfigTests(_FerryBase):
     def test_remote_add_writes_url(self):
-        core.remote_add("origin", "user@host:/srv/weave", path=self.cfg)
+        core.remote_add("origin", "user@host:/srv/ferry", path=self.cfg)
         self.assertEqual(
-            config.get_remote("origin", path=self.cfg), "user@host:/srv/weave")
+            config.get_remote("origin", path=self.cfg), "user@host:/srv/ferry")
 
     def test_remote_add_duplicate_name_raises(self):
         core.remote_add("origin", "user@host:/old", path=self.cfg)
@@ -73,7 +73,7 @@ class ConfigTests(_WeaveBase):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         with self.assertRaises(ValueError):
             config.get_remote("missing", path=self.cfg)
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             _core_mod._remote_url("missing", path=self.cfg)
 
     def test_resolve_remote_defaults_to_sole_remote(self):
@@ -88,13 +88,13 @@ class ConfigTests(_WeaveBase):
             _core_mod._resolve_remote("backup", path=self.cfg), "backup")
 
     def test_resolve_remote_none_with_no_remotes_raises(self):
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             _core_mod._resolve_remote(None, path=self.cfg)
 
     def test_resolve_remote_none_with_multiple_raises(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         core.remote_add("backup", "u@h:/b", path=self.cfg)
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             _core_mod._resolve_remote(None, path=self.cfg)
 
 
@@ -122,7 +122,7 @@ class FakeServer:
         del self.store[(url, name)]
 
 
-class PushTests(_WeaveBase):
+class PushTests(_FerryBase):
     def _seed_session(self, session_id, text):
         cc.write_text(cc.session_path(self.cwd, session_id), text)
 
@@ -143,7 +143,7 @@ class PushTests(_WeaveBase):
 
     def test_push_unknown_remote_raises(self):
         self._seed_session("sess-1", '{"uuid":"x"}\n')
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.push("nope", "n", "sess-1",
                       server=FakeServer(), config_path=self.cfg)
 
@@ -159,7 +159,7 @@ class PushTests(_WeaveBase):
 
     def test_push_no_remote_arg_with_no_remotes_raises(self):
         self._seed_session("sess-1", '{"uuid":"x"}\n')
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.push(None, "n", "sess-1",
                       server=FakeServer(), config_path=self.cfg)
 
@@ -167,7 +167,7 @@ class PushTests(_WeaveBase):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         self._seed_session("old-sess", '{"uuid":"old"}\n')
         self._seed_session("new-sess", '{"uuid":"new"}\n')
-        with self.assertRaises(core.WeaveError) as ctx:
+        with self.assertRaises(core.FerryError) as ctx:
             core.push("origin", "ambig-name", None,
                       cwd=self.cwd, server=FakeServer(), config_path=self.cfg)
         msg = str(ctx.exception)
@@ -187,7 +187,7 @@ class PushTests(_WeaveBase):
 
     def test_push_omitted_session_with_no_local_raises(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
-        with self.assertRaises(core.WeaveError) as ctx:
+        with self.assertRaises(core.FerryError) as ctx:
             core.push("origin", "n", None,
                       cwd=self.cwd, server=FakeServer(), config_path=self.cfg)
         self.assertIn(self.cwd, str(ctx.exception))
@@ -206,7 +206,7 @@ class PushTests(_WeaveBase):
             fake.pushed, [("u@h:/p", "auth-refactor", '{"uuid":"x"}\n')])
 
 
-class RmTests(_WeaveBase):
+class RmTests(_FerryBase):
     def test_rm_deletes_and_returns_resolved_remote(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         fake = FakeServer({("u@h:/p", "auth"): "T\n"})
@@ -214,13 +214,13 @@ class RmTests(_WeaveBase):
         self.assertEqual(resolved, "origin")
         self.assertNotIn(("u@h:/p", "auth"), fake.store)
 
-    def test_rm_absent_session_is_weave_error(self):
+    def test_rm_absent_session_is_ferry_error(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.rm("origin", "ghost", server=FakeServer(), config_path=self.cfg)
 
 
-class LogTests(_WeaveBase):
+class LogTests(_FerryBase):
     def _seed_session(self, session_id, text):
         cc.write_text(cc.session_path(self.cwd, session_id), text)
 
@@ -251,7 +251,7 @@ class LogTests(_WeaveBase):
         self.assertEqual(entries[1]["id"], new_id)
 
 
-class RewriteAndPullTests(_WeaveBase):
+class RewriteAndPullTests(_FerryBase):
     def test_pull_filename_matches_new_id(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         fake = FakeServer({("u@h:/p", "auth"): _VALID_ENTRY})
@@ -323,21 +323,21 @@ class RewriteAndPullTests(_WeaveBase):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         fake = FakeServer({("u@h:/p", "empty"): "\n"})
         before = set(cc.list_sessions())
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.pull("origin", "empty", cwd=self.cwd,
                       server=fake, config_path=self.cfg)
         self.assertEqual(set(cc.list_sessions()), before)  # nothing written
 
-    def test_pull_absent_remote_session_is_weave_error(self):
+    def test_pull_absent_remote_session_is_ferry_error(self):
         core.remote_add("origin", "u@h:/p", path=self.cfg)
         before = set(cc.list_sessions())
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.pull("origin", "ghost", cwd=self.cwd,
                       server=FakeServer(), config_path=self.cfg)
         self.assertEqual(set(cc.list_sessions()), before)
 
 
-class LsTests(_WeaveBase):
+class LsTests(_FerryBase):
     def test_ls_local_filters_to_cwd(self):
         cc.write_text(cc.session_path(self.cwd, "mine-1"), "{}\n")
         cc.write_text(cc.session_path(self.cwd, "mine-2"), "{}\n")
@@ -354,8 +354,8 @@ class LsTests(_WeaveBase):
             {"a", "b"})
 
 
-class HubEndToEndTests(_WeaveBase):
-    """Drive core -> real weave.remote -> localhost hub folder (no `server=`)."""
+class HubEndToEndTests(_FerryBase):
+    """Drive core -> real ferry.remote -> localhost hub folder (no `server=`)."""
 
     def setUp(self):
         super().setUp()
@@ -363,7 +363,7 @@ class HubEndToEndTests(_WeaveBase):
         self.hub_dir = self.tmp / "hub"
         self.hub_dir.mkdir()
         self.password = "test-secret"
-        env = mock.patch.dict(os.environ, {"WEAVE_HUB_PASSWORD": self.password})
+        env = mock.patch.dict(os.environ, {"FERRY_HUB_PASSWORD": self.password})
         env.start()
         self.addCleanup(env.stop)
         self.server._reset_client_cache()
@@ -398,7 +398,7 @@ class HubEndToEndTests(_WeaveBase):
         self._seed_local("local-1", _VALID_ENTRY)
         self._seed_local("local-2", _VALID_ENTRY.replace("u1", "u2"))
         core.push("origin", "auth", "local-1", config_path=self.cfg)
-        with self.assertRaises(core.WeaveError) as ctx:
+        with self.assertRaises(core.FerryError) as ctx:
             core.push("origin", "auth", "local-2", config_path=self.cfg)
         self.assertIn("already exists", str(ctx.exception))
         self.assertIn("u1", (self.hub_dir / "auth.jsonl").read_text(encoding="utf-8"))
@@ -410,29 +410,29 @@ class HubEndToEndTests(_WeaveBase):
         self.assertEqual(
             set(core.ls("origin", config_path=self.cfg)), {"auth", "ui"})
 
-    def test_pull_absent_session_raises_weave_error(self):
-        with self.assertRaises(core.WeaveError):
+    def test_pull_absent_session_raises_ferry_error(self):
+        with self.assertRaises(core.FerryError):
             core.pull("origin", "ghost", cwd=self.cwd, config_path=self.cfg)
 
     def test_rm_removes_via_real_remote_package(self):
-        # Drives core.rm through the REAL weave.remote package (no server=),
+        # Drives core.rm through the REAL ferry.remote package (no server=),
         # so a missing delete export on the package surface is caught here.
         self._seed_local("local-1", _VALID_ENTRY)
         core.push("origin", "auth", "local-1", config_path=self.cfg)
         core.rm("origin", "auth", config_path=self.cfg)
         self.assertFalse((self.hub_dir / "auth.jsonl").exists())
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.pull("origin", "auth", cwd=self.cwd, config_path=self.cfg)
 
 
-class WalkUpTests(_WeaveBase):
+class WalkUpTests(_FerryBase):
     def setUp(self):
         super().setUp()
         self.repo = self.tmp / "repo"
         self.repo.mkdir()
         self.src = self.repo / "src"
         self.src.mkdir()
-        self.repo_cfg = self.repo / ".weave" / "config"
+        self.repo_cfg = self.repo / ".ferry" / "config"
         self._orig_cwd = os.getcwd()
         self.addCleanup(lambda: os.chdir(self._orig_cwd))
 
@@ -470,26 +470,26 @@ class WalkUpTests(_WeaveBase):
         core.remote_add("origin", "u@h:/p", path=self.repo_cfg)
         os.chdir(self.src)
         project = str(config.project_dir())
-        with self.assertRaises(core.WeaveError) as ctx:
+        with self.assertRaises(core.FerryError) as ctx:
             core.push(None, "n", None, server=FakeServer())
         self.assertIn(project, str(ctx.exception))
         self.assertNotIn(os.getcwd(), str(ctx.exception))
 
     def test_no_config_raises_not_a_project(self):
         os.chdir(self.src)
-        with self.assertRaises(core.WeaveError) as ctx:
+        with self.assertRaises(core.FerryError) as ctx:
             core.push(None, "n", "s", server=FakeServer())
-        self.assertIn("not a Weave project", str(ctx.exception))
+        self.assertIn("not a Ferry project", str(ctx.exception))
 
     def test_remote_add_creates_config_in_cwd(self):
         os.chdir(self.src)
         core.remote_add("origin", "u@h:/p")
-        self.assertTrue((self.src / ".weave" / "config").is_file())
+        self.assertTrue((self.src / ".ferry" / "config").is_file())
         self.assertEqual(config.get_remote("origin"), "u@h:/p")
 
 
-class MissingCredentialsTests(_WeaveBase):
-    """No WEAVE_HUB_PASSWORD -> server raises -> core surfaces a WeaveError."""
+class MissingCredentialsTests(_FerryBase):
+    """No FERRY_HUB_PASSWORD -> server raises -> core surfaces a FerryError."""
 
     def setUp(self):
         super().setUp()
@@ -498,21 +498,21 @@ class MissingCredentialsTests(_WeaveBase):
         self.addCleanup(self.server._reset_client_cache)
         env = mock.patch.dict(os.environ, {}, clear=False)
         env.start()
-        os.environ.pop("WEAVE_HUB_PASSWORD", None)
+        os.environ.pop("FERRY_HUB_PASSWORD", None)
         self.addCleanup(env.stop)
         # Neutralise .env autoload so the password stays genuinely absent.
-        loader = mock.patch("weave.remote.remote.ensure_dotenv_loaded",
+        loader = mock.patch("ferry.remote.remote.ensure_dotenv_loaded",
                             return_value=None)
         loader.start()
         self.addCleanup(loader.stop)
         core.remote_add("origin", "http://127.0.0.1:8080", path=self.cfg)
 
-    def test_pull_without_creds_is_weave_error(self):
-        with self.assertRaises(core.WeaveError):
+    def test_pull_without_creds_is_ferry_error(self):
+        with self.assertRaises(core.FerryError):
             core.pull("origin", "auth", cwd=self.cwd, config_path=self.cfg)
 
-    def test_ls_without_creds_is_weave_error(self):
-        with self.assertRaises(core.WeaveError):
+    def test_ls_without_creds_is_ferry_error(self):
+        with self.assertRaises(core.FerryError):
             core.ls("origin", config_path=self.cfg)
 
 

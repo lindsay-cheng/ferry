@@ -1,10 +1,10 @@
-"""argparse CLI for weave: push / pull / remote add / ls.
+"""argparse CLI for ferry: push / pull / remote add / ls.
 
-Thin marshalling over weave.core.
+Thin marshalling over ferry.core.
 
-The top-level ``weave help`` / ``weave --help`` output is hand-rendered in a
+The top-level ``ferry help`` / ``ferry --help`` output is hand-rendered in a
 git-like style (grouped commands, aligned parameter signatures, optional
-arguments shown in [brackets]). Per-command help (``weave <command> -h``) is
+arguments shown in [brackets]). Per-command help (``ferry <command> -h``) is
 argparse's, tuned with ``<placeholder>`` metavars so optional positionals show
 up bracketed there too.
 """
@@ -13,11 +13,11 @@ import argparse
 import subprocess
 import sys
 
-from weave import __version__, config, connector as cc, core
+from ferry import __version__, config, connector as cc, core
 
 _TAGLINE = "git for your Claude Code agent context"
 
-_WEAVE_ART = (
+_FERRY_ART = (
     "\033[33m"
     "*%%*\n"
     "                    =**+  %@%%\n"
@@ -58,8 +58,8 @@ _HELP_NOTES = [
     "push omits '--session' when only one local chat exists; pass '--session <id>' when several do.",
     "Session names are letters, numbers, and hyphen; stored lowercase. Reusing a name is an error.",
     "Add '-o' / '--open' to pull to resume the session immediately with 'claude --resume'.",
-    "Run 'weave <command> -h' to see the parameters for a single command.",
-    "Run 'weave --version' to print the installed version.",
+    "Run 'ferry <command> -h' to see the parameters for a single command.",
+    "Run 'ferry --version' to print the installed version.",
 ]
 
 
@@ -67,13 +67,13 @@ def _render_help():
     """Build the git-like top-level help text (ends with a trailing newline)."""
     width = max(len(sig) for _, cmds in _HELP_GROUPS for sig, _ in cmds)
     lines = [
-        _WEAVE_ART,
+        _FERRY_ART,
         "",
-        "\033[1;36musage:\033[0m weave <command> [<args>]",
+        "\033[1;36musage:\033[0m ferry <command> [<args>]",
         "",
-        f"weave -- {_TAGLINE}.",
+        f"ferry -- {_TAGLINE}.",
         "",
-        "\033[1mThese are the weave commands used in various situations:\033[0m",
+        "\033[1mThese are the ferry commands used in various situations:\033[0m",
         "",
     ]
     for title, cmds in _HELP_GROUPS:
@@ -88,7 +88,7 @@ def _render_help():
 
 
 def _build_parser():
-    p = argparse.ArgumentParser(prog="weave")
+    p = argparse.ArgumentParser(prog="ferry")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
 
     sp = sub.add_parser("push", help="upload a local session to a remote",
@@ -115,7 +115,7 @@ def _build_parser():
     rmp.add_argument("name", metavar="<name>", help="name of the session on the remote")
 
     rm = sub.add_parser("remote", help="manage remotes",
-                        description="Manage the remotes weave can push to and pull from.")
+                        description="Manage the remotes ferry can push to and pull from.")
     rmsub = rm.add_subparsers(dest="remote_cmd", required=True, metavar="<subcommand>")
     rma = rmsub.add_parser("add", help="register a remote",
                            description="Register a remote named <name> at <url>.")
@@ -143,19 +143,19 @@ def _open_session(session_id):
     try:
         subprocess.run(["claude", "--resume", session_id], check=False)
     except FileNotFoundError:
-        print(f"weave: 'claude' not found on PATH; resume manually with: "
+        print(f"ferry: 'claude' not found on PATH; resume manually with: "
               f"claude --resume {session_id}", file=sys.stderr)
 
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    # git-style: bare `weave`, `weave help`, and the help flags all print the
+    # git-style: bare `ferry`, `ferry help`, and the help flags all print the
     # custom command reference and exit cleanly.
     if not argv or argv[0] in ("help", "-h", "--help"):
         sys.stdout.write(_render_help())
         return 0
     if argv[0] in ("--version", "-V"):
-        print(f"weave {__version__}")
+        print(f"ferry {__version__}")
         return 0
 
     parser = _build_parser()
@@ -189,7 +189,7 @@ def main(argv=None):
                 print(f"{e.get('ts','')}  {e.get('op',''):<5} "
                       f"{e.get('remote','')}/{e.get('name','')}{suffix}")
     except ValueError as e:
-        print(f"weave: {e}", file=sys.stderr)
+        print(f"ferry: {e}", file=sys.stderr)
         return 1
     return 0
 

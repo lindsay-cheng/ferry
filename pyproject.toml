@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "weave-sessions"
+name = "ferry-sessions"
 version = "0.1.0"
 description = "Share Claude Code sessions over HTTP"
 readme = "README.md"
@@ -27,15 +27,15 @@ dependencies = []
 dev = ["build"]
 
 [project.scripts]
-weave = "weave.cli:main"
-weave-hub = "weave.hub:main"
+ferry = "ferry.cli:main"
+ferry-hub = "ferry.hub:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["weave"]
+packages = ["ferry"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/weave",
+  "/ferry",
   "/fixtures",
   "/README.md",
   "/LICENSE",

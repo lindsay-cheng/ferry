@@ -3,14 +3,14 @@ import json
 import os
 from pathlib import Path
 
-DEFAULT_PATH = ".weave/config"
+DEFAULT_PATH = ".ferry/config"
 
 _NOT_A_PROJECT = (
-    "not a Weave project — run: weave remote add <name> <url>")
+    "not a Ferry project — run: ferry remote add <name> <url>")
 
 
 def _find_config(start_dir=None):
-    """Walk up from start_dir (default cwd) for an existing ``.weave/config`` file."""
+    """Walk up from start_dir (default cwd) for an existing ``.ferry/config`` file."""
     d = Path(start_dir or os.getcwd())
     while True:
         candidate = d / DEFAULT_PATH
@@ -26,7 +26,7 @@ def _config_path(path, *, create=False):
     """Resolve the config file path.
 
     Explicit ``path``: use that file (may not exist yet). ``path`` is ``None``:
-    walk up from cwd; when ``create`` and none found, target ``cwd/.weave/config``.
+    walk up from cwd; when ``create`` and none found, target ``cwd/.ferry/config``.
     """
     if path is not None:
         return Path(path)
@@ -39,7 +39,7 @@ def _config_path(path, *, create=False):
 
 
 def project_dir(*, path=None):
-    """Return the Weave project folder (the directory that contains ``.weave``)."""
+    """Return the Ferry project folder (the directory that contains ``.ferry``)."""
     return _config_path(path).parent.parent
 
 
@@ -51,7 +51,7 @@ def _read_cfg(cfg_path):
 
 
 def _log_path(path):
-    """Operation log lives next to the config file (``.weave/log``)."""
+    """Operation log lives next to the config file (``.ferry/log``)."""
     return _config_path(path).parent / "log"
 
 
@@ -101,7 +101,7 @@ def get_remote(name, *, path=None):
     cfg = _read_cfg(_config_path(path))
     section = f'remote "{name}"'
     if not cfg.has_option(section, "url"):
-        raise ValueError(f"no remote {name!r} — run: weave remote add {name} <url>")
+        raise ValueError(f"no remote {name!r} — run: ferry remote add {name} <url>")
     return cfg.get(section, "url")
 
 

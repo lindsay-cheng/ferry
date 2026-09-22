@@ -4,16 +4,16 @@
 
 **Goal:** Replace the semantic-sidecar merge with a transcript-level merge that detects the shared prefix of two sessions, asks Cerebras for one briefing document unifying the divergent branches, and writes a new resumable cloned session with the briefing spliced in as a synthetic `Read` tool cycle.
 
-**Architecture:** `weave.core.merge` linearizes both transcripts, finds the longest common content prefix, and hands (shared distilled, A-branch raw, B-branch raw) to a **pure** merge layer that returns briefing **text**. Core then clones source A in memory, deletes A's branch, splices in a `Read` tool cycle whose `tool_result` holds the briefing, rewrites identity for the local machine, and writes a resumable session JSONL via the connector. The old `MergedContext` schema, validator, JSON parser, and sidecar writer are deleted.
+**Architecture:** `ferry.core.merge` linearizes both transcripts, finds the longest common content prefix, and hands (shared distilled, A-branch raw, B-branch raw) to a **pure** merge layer that returns briefing **text**. Core then clones source A in memory, deletes A's branch, splices in a `Read` tool cycle whose `tool_result` holds the briefing, rewrites identity for the local machine, and writes a resumable session JSONL via the connector. The old `MergedContext` schema, validator, JSON parser, and sidecar writer are deleted.
 
-**Tech Stack:** Python 3 (stdlib only in core/transcript/connector; `supabase` only in `weave.remote`, untouched here). Tests are `unittest`-style, run with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q` from the repo root.
+**Tech Stack:** Python 3 (stdlib only in core/transcript/connector; `supabase` only in `ferry.remote`, untouched here). Tests are `unittest`-style, run with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q` from the repo root.
 
 ## Global Constraints
 
 - **Run the suite with:** `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q` (a broken third-party `lapse` pytest plugin must stay disabled). Baseline before this work: `120 passed, 2 skipped, 643 subtests passed`.
-- **Stdlib only** in `weave.core`, `weave.transcript`, `weave.connector`. The merge layer may use stdlib HTTP only (already the case).
-- **Package-per-module layout:** every module is a directory with an `__init__.py` public surface over impl files. Tests reach module *internals* through the impl submodule (e.g. `from weave.core import core as _core_mod`), and public surface through the package (`from weave import core`).
-- **Cerebras / merge layer is pure and read-only:** it takes contexts in and returns text out. No file I/O, no transcript edits — those live only in `weave.core`.
+- **Stdlib only** in `ferry.core`, `ferry.transcript`, `ferry.connector`. The merge layer may use stdlib HTTP only (already the case).
+- **Package-per-module layout:** every module is a directory with an `__init__.py` public surface over impl files. Tests reach module *internals* through the impl submodule (e.g. `from ferry.core import core as _core_mod`), and public surface through the package (`from ferry import core`).
+- **Cerebras / merge layer is pure and read-only:** it takes contexts in and returns text out. No file I/O, no transcript edits — those live only in `ferry.core`.
 - **Non-destructive:** both source sessions on disk are never mutated; the merged result is a new session id.
 - **Merge output shape:** a single plain-text briefing document. No output schema, no JSON validation of the model response.
 - **Test framework:** `unittest.TestCase` classes (matches the existing suite), executed via pytest.
@@ -25,8 +25,8 @@
 Adds pure content-comparison helpers to `core`. Purely additive — no existing behavior changes, suite stays green.
 
 **Files:**
-- Modify: `weave/core/core.py` (add helpers near the top, after the imports)
-- Test: `tests/test_weave_merge.py` (create)
+- Modify: `ferry/core/core.py` (add helpers near the top, after the imports)
+- Test: `tests/test_ferry_merge.py` (create)
 
 **Interfaces:**
 - Consumes: nothing new.
@@ -37,17 +37,17 @@ Adds pure content-comparison helpers to `core`. Purely additive — no existing 
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/test_weave_merge.py`:
+Create `tests/test_ferry_merge.py`:
 
 ```python
-"""Tests for weave.core transcript-level merge.
+"""Tests for ferry.core transcript-level merge.
 
-Run (from repo root):  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_merge.py -q
+Run (from repo root):  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_merge.py -q
 """
 
 import unittest
 
-from weave.core import core as _core
+from ferry.core import core as _core
 
 
 def _user(uuid, text, *, sid="s", cwd="/a", ts="2026-06-26T10:00:00.000Z"):
@@ -128,12 +128,12 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_merge.py -q`
-Expected: FAIL — `AttributeError: module 'weave.core.core' has no attribute '_entry_key'`.
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_merge.py -q`
+Expected: FAIL — `AttributeError: module 'ferry.core.core' has no attribute '_entry_key'`.
 
-- [ ] **Step 3: Add the helpers to `weave/core/core.py`**
+- [ ] **Step 3: Add the helpers to `ferry/core/core.py`**
 
-Insert after the existing imports and before `class WeaveError` (the `json` module is already imported at the top of the file):
+Insert after the existing imports and before `class FerryError` (the `json` module is already imported at the top of the file):
 
 ```python
 _VOLATILE_BLOCK_KEYS = ("id", "tool_use_id")
@@ -186,7 +186,7 @@ def _split_at_branch(a, b):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_merge.py -q`
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_merge.py -q`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Run the full suite**
@@ -197,7 +197,7 @@ Expected: `127 passed, 2 skipped` (the prior 120 + 7 new), still green.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add weave/core/core.py tests/test_weave_merge.py
+git add ferry/core/core.py tests/test_ferry_merge.py
 git commit -m "feat(core): shared-prefix detection for transcript merge"
 ```
 
@@ -208,12 +208,12 @@ git commit -m "feat(core): shared-prefix detection for transcript merge"
 Adds the pure text-briefing merger in a new module, leaving the old `MergedContext` merger in place. Additive — suite stays green.
 
 **Files:**
-- Create: `weave/merge/briefing.py`
-- Modify: `weave/merge/__init__.py` (add new exports alongside the old)
+- Create: `ferry/merge/briefing.py`
+- Modify: `ferry/merge/__init__.py` (add new exports alongside the old)
 - Test: `tests/test_merge_briefing.py` (create)
 
 **Interfaces:**
-- Consumes: `weave.merge.client.CerebrasClient` / `default_cerebras_client`, `weave.merge.env.cerebras_configured`, `weave.merge.exceptions.MergeClientError`/`MergeResponseError`, `weave.context.types.ChatContext`.
+- Consumes: `ferry.merge.client.CerebrasClient` / `default_cerebras_client`, `ferry.merge.env.cerebras_configured`, `ferry.merge.exceptions.MergeClientError`/`MergeResponseError`, `ferry.context.types.ChatContext`.
 - Produces:
   - `build_briefing_prompt(shared_context: ChatContext | None, a_branch: list[dict], b_branch: list[dict]) -> str`
   - `class BriefingMerger` with `merge(self, shared_context, a_branch, b_branch) -> str` (raises `MergeResponseError` on empty output).
@@ -232,13 +232,13 @@ Run (from repo root):  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/
 
 import unittest
 
-from weave.context.types import ChatContext
-from weave.merge.briefing import (
+from ferry.context.types import ChatContext
+from ferry.merge.briefing import (
     BriefingMerger,
     StubBriefingMerger,
     build_briefing_prompt,
 )
-from weave.merge.exceptions import MergeResponseError
+from ferry.merge.exceptions import MergeResponseError
 
 
 def _ctx(summary):
@@ -309,16 +309,16 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_merge_briefing.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'weave.merge.briefing'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'ferry.merge.briefing'`.
 
-- [ ] **Step 3: Create `weave/merge/briefing.py`**
+- [ ] **Step 3: Create `ferry/merge/briefing.py`**
 
 ```python
 """Pure text-briefing merge layer.
 
 Takes the distilled shared background plus the two raw divergent branches and
 returns a single briefing document. No I/O, no transcript edits -- those live in
-weave.core. This module will become the canonical merge layer once the old
+ferry.core. This module will become the canonical merge layer once the old
 MergedContext path is removed.
 """
 
@@ -326,10 +326,10 @@ from __future__ import annotations
 
 import json
 
-from weave.context.types import ChatContext
-from weave.merge.client import CerebrasClient, default_cerebras_client
-from weave.merge.env import cerebras_configured
-from weave.merge.exceptions import MergeClientError, MergeResponseError
+from ferry.context.types import ChatContext
+from ferry.merge.client import CerebrasClient, default_cerebras_client
+from ferry.merge.env import cerebras_configured
+from ferry.merge.exceptions import MergeClientError, MergeResponseError
 
 
 def build_briefing_prompt(
@@ -412,12 +412,12 @@ def default_briefing_merger(*, client: CerebrasClient | None = None) -> Briefing
     return BriefingMerger(client=client)
 ```
 
-- [ ] **Step 4: Add exports to `weave/merge/__init__.py`**
+- [ ] **Step 4: Add exports to `ferry/merge/__init__.py`**
 
 Add these imports and `__all__` entries alongside the existing ones (do not remove anything yet):
 
 ```python
-from weave.merge.briefing import (
+from ferry.merge.briefing import (
     BriefingMerger,
     StubBriefingMerger,
     build_briefing_prompt,
@@ -440,7 +440,7 @@ Expected: `133 passed, 2 skipped`, green.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add weave/merge/briefing.py weave/merge/__init__.py tests/test_merge_briefing.py
+git add ferry/merge/briefing.py ferry/merge/__init__.py tests/test_merge_briefing.py
 git commit -m "feat(merge): pure text-briefing merge layer (additive)"
 ```
 
@@ -451,19 +451,19 @@ git commit -m "feat(merge): pure text-briefing merge layer (additive)"
 Adds the orchestration that ties Task 1 + Task 2 into a resumable JSONL, alongside the still-present `merge_contexts`. Uses the temporary name `MergedSession` for the result (renamed to `MergeResult` in Task 4, where the old `MergeResult` is deleted).
 
 **Files:**
-- Modify: `weave/core/core.py` (add `merge`, `_read_source`, `_distill_shared`, `MergedSession`)
-- Modify: `weave/core/__init__.py` (export `merge`, `MergedSession`)
-- Test: `tests/test_weave_merge.py` (append)
+- Modify: `ferry/core/core.py` (add `merge`, `_read_source`, `_distill_shared`, `MergedSession`)
+- Modify: `ferry/core/__init__.py` (export `merge`, `MergedSession`)
+- Test: `tests/test_ferry_merge.py` (append)
 
 **Interfaces:**
-- Consumes: `_split_at_branch` (Task 1); `default_briefing_merger` (Task 2, imported lazily); existing `weave.transcript` (`from_text`, `to_text`, `delete_between`, `create_after`, `create_at_start`), existing `weave.connector` (`read_text`, `session_path`, `write_text`), existing `core._new_id` and `core._rewrite_for_local`, `weave.context.distill.distill_from_jsonl`.
+- Consumes: `_split_at_branch` (Task 1); `default_briefing_merger` (Task 2, imported lazily); existing `ferry.transcript` (`from_text`, `to_text`, `delete_between`, `create_after`, `create_at_start`), existing `ferry.connector` (`read_text`, `session_path`, `write_text`), existing `core._new_id` and `core._rewrite_for_local`, `ferry.context.distill.distill_from_jsonl`.
 - Produces:
   - `merge(source_a: str, source_b: str, *, cwd: str | None = None, merger=None) -> MergedSession`
   - `@dataclass(frozen=True) class MergedSession` with fields `session_id: str`, `jsonl_path: str`, `branch_point: str | None`, `a_tail_len: int`, `b_tail_len: int`.
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/test_weave_merge.py` (add imports at the top of the file: `import json`, `import os`, `import tempfile`, `from pathlib import Path`, `from unittest import mock`, `from weave import connector as cc`, `from weave import core`, `from weave.merge.briefing import StubBriefingMerger`):
+Append to `tests/test_ferry_merge.py` (add imports at the top of the file: `import json`, `import os`, `import tempfile`, `from pathlib import Path`, `from unittest import mock`, `from ferry import connector as cc`, `from ferry import core`, `from ferry.merge.briefing import StubBriefingMerger`):
 
 ```python
 _VALID_A = (
@@ -556,12 +556,12 @@ class MergeWritesResumableSessionTests(_MergeBase):
 class MergeErrorTests(_MergeBase):
     def test_identical_sessions_raise(self):
         self.b_path.write_text(_VALID_A, encoding="utf-8")
-        with self.assertRaises(core.WeaveError):
+        with self.assertRaises(core.FerryError):
             core.merge(str(self.a_path), str(self.b_path),
                        cwd=self.cwd, merger=StubBriefingMerger())
 
-    def test_missing_source_raises_weave_error(self):
-        with self.assertRaises(core.WeaveError):
+    def test_missing_source_raises_ferry_error(self):
+        with self.assertRaises(core.FerryError):
             core.merge(str(Path(self.tmp) / "nope.jsonl"), str(self.b_path),
                        cwd=self.cwd, merger=StubBriefingMerger())
 
@@ -587,10 +587,10 @@ class MergeErrorTests(_MergeBase):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_merge.py -q`
-Expected: FAIL — `AttributeError: module 'weave.core.core' has no attribute 'merge'` (the new tests; Task 1 tests still pass).
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_merge.py -q`
+Expected: FAIL — `AttributeError: module 'ferry.core.core' has no attribute 'merge'` (the new tests; Task 1 tests still pass).
 
-- [ ] **Step 3: Add `merge` + helpers + `MergedSession` to `weave/core/core.py`**
+- [ ] **Step 3: Add `merge` + helpers + `MergedSession` to `ferry/core/core.py`**
 
 Add the dataclass near the existing `MergeResult` dataclass:
 
@@ -608,11 +608,11 @@ Add these functions (place them after the existing `merge_contexts`):
 
 ```python
 def _read_source(source):
-    """Read a session's JSONL by id or path, mapping connector errors to WeaveError."""
+    """Read a session's JSONL by id or path, mapping connector errors to FerryError."""
     try:
         return cc.read_text(source)
     except ValueError as exc:
-        raise WeaveError(str(exc)) from exc
+        raise FerryError(str(exc)) from exc
 
 
 def _distill_shared(a_entries, branch_point, source_path):
@@ -626,7 +626,7 @@ def _distill_shared(a_entries, branch_point, source_path):
             shared_text, source_label="shared", source_path=str(source_path)
         ).context
     except ValueError as exc:
-        raise WeaveError(str(exc)) from exc
+        raise FerryError(str(exc)) from exc
 
 
 def merge(source_a, source_b, *, cwd=None, merger=None):
@@ -641,15 +641,15 @@ def merge(source_a, source_b, *, cwd=None, merger=None):
     a = tx.from_text(_read_source(source_a))
     b = tx.from_text(_read_source(source_b))
     if not a and not b:
-        raise WeaveError("no chat history in either session")
+        raise FerryError("no chat history in either session")
 
     branch_point, a_tail, b_tail = _split_at_branch(a, b)
     if not a_tail and not b_tail:
-        raise WeaveError("sessions are identical; nothing to merge")
+        raise FerryError("sessions are identical; nothing to merge")
 
     shared_ctx = _distill_shared(a, branch_point, source_a)
 
-    from weave.merge.briefing import default_briefing_merger
+    from ferry.merge.briefing import default_briefing_merger
     active = merger or default_briefing_merger()
     briefing = active.merge(shared_ctx, a_tail, b_tail)   # MergeError propagates; nothing written yet
 
@@ -658,7 +658,7 @@ def merge(source_a, source_b, *, cwd=None, merger=None):
         entries, _ = tx.delete_between(entries, a_tail[0]["uuid"], a[-1]["uuid"])
     spec = {
         "type": "tool_call", "name": "Read",
-        "input": {"file_path": "weave-merged-context"},
+        "input": {"file_path": "ferry-merged-context"},
         "result": briefing,
     }
     if branch_point is None:
@@ -677,13 +677,13 @@ def merge(source_a, source_b, *, cwd=None, merger=None):
     )
 ```
 
-- [ ] **Step 4: Export from `weave/core/__init__.py`**
+- [ ] **Step 4: Export from `ferry/core/__init__.py`**
 
-Add `merge` and `MergedSession` to the `from weave.core.core import (...)` list and to `__all__` (keep `merge_contexts`/`MergeResult` for now).
+Add `merge` and `MergedSession` to the `from ferry.core.core import (...)` list and to `__all__` (keep `merge_contexts`/`MergeResult` for now).
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_merge.py -q`
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_merge.py -q`
 Expected: PASS (Task 1's 7 + Task 3's 6 = 13).
 
 - [ ] **Step 6: Run the full suite**
@@ -694,7 +694,7 @@ Expected: `139 passed, 2 skipped`, green.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add weave/core/core.py weave/core/__init__.py tests/test_weave_merge.py
+git add ferry/core/core.py ferry/core/__init__.py tests/test_ferry_merge.py
 git commit -m "feat(core): merge writes a resumable cloned session"
 ```
 
@@ -705,23 +705,23 @@ git commit -m "feat(core): merge writes a resumable cloned session"
 Flips the CLI to the new merge, deletes the `MergedContext` schema/validator/parser/sidecar and the old mergers, and renames the temporary names to their canonical forms. Ends green.
 
 **Files:**
-- Modify: `weave/cli/cli.py`
-- Modify: `weave/core/core.py` (delete `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path`, old `MergeResult`, sidecar constants; rename `MergedSession` → `MergeResult`)
-- Modify: `weave/core/__init__.py`
-- Modify: `weave/merge/protocols.py`, `weave/merge/cerebras.py`, `weave/merge/stub.py`, `weave/merge/prompt.py`, `weave/merge/factory.py`, `weave/merge/__init__.py`, `weave/merge/exceptions.py`
-- Delete: `weave/merge/types.py`, `weave/merge/validator.py`, `weave/merge/parse.py`, `weave/merge/briefing.py`
-- Modify/Delete tests: `tests/test_weave_cli.py` (modify), `tests/merge_test_fixtures.py` (rewrite), `tests/test_merge_pipeline.py` (reduce to boundary test), `tests/test_merge_briefing.py` (rename classes), delete `tests/test_merge_types.py`, delete `tests/test_merge_e2e.py`
+- Modify: `ferry/cli/cli.py`
+- Modify: `ferry/core/core.py` (delete `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path`, old `MergeResult`, sidecar constants; rename `MergedSession` → `MergeResult`)
+- Modify: `ferry/core/__init__.py`
+- Modify: `ferry/merge/protocols.py`, `ferry/merge/cerebras.py`, `ferry/merge/stub.py`, `ferry/merge/prompt.py`, `ferry/merge/factory.py`, `ferry/merge/__init__.py`, `ferry/merge/exceptions.py`
+- Delete: `ferry/merge/types.py`, `ferry/merge/validator.py`, `ferry/merge/parse.py`, `ferry/merge/briefing.py`
+- Modify/Delete tests: `tests/test_ferry_cli.py` (modify), `tests/merge_test_fixtures.py` (rewrite), `tests/test_merge_pipeline.py` (reduce to boundary test), `tests/test_merge_briefing.py` (rename classes), delete `tests/test_merge_types.py`, delete `tests/test_merge_e2e.py`
 
 **Interfaces:**
-- Consumes: `core.merge` + `MergeResult` (post-rename), `weave.merge` text contract.
+- Consumes: `core.merge` + `MergeResult` (post-rename), `ferry.merge` text contract.
 - Produces final public surface:
-  - `weave.merge`: `ContextMerger.merge(shared, a_branch, b_branch) -> str`, `CerebrasMerger`, `StubMerger`, `build_merge_prompt`, `default_merger`, `MergeError`/`MergeClientError`/`MergeResponseError`.
-  - `weave.core`: `merge(...) -> MergeResult`, `MergeResult(session_id, jsonl_path, branch_point, a_tail_len, b_tail_len)`, plus existing `pull`/`push`/`ls`/`remote_add`/`WeaveError`.
-  - `weave.cli`: `weave merge <source_a> <source_b>`.
+  - `ferry.merge`: `ContextMerger.merge(shared, a_branch, b_branch) -> str`, `CerebrasMerger`, `StubMerger`, `build_merge_prompt`, `default_merger`, `MergeError`/`MergeClientError`/`MergeResponseError`.
+  - `ferry.core`: `merge(...) -> MergeResult`, `MergeResult(session_id, jsonl_path, branch_point, a_tail_len, b_tail_len)`, plus existing `pull`/`push`/`ls`/`remote_add`/`FerryError`.
+  - `ferry.cli`: `ferry merge <source_a> <source_b>`.
 
 - [ ] **Step 1: Write/adjust the failing CLI test**
 
-In `tests/test_weave_cli.py`, replace the existing `merge` test body so it drives the new signature. Find the merge test (it currently patches `core.merge_contexts` and passes `--output-dir`) and replace it with:
+In `tests/test_ferry_cli.py`, replace the existing `merge` test body so it drives the new signature. Find the merge test (it currently patches `core.merge_contexts` and passes `--output-dir`) and replace it with:
 
 ```python
     def test_merge_subcommand_prints_resume_hint(self):
@@ -738,14 +738,14 @@ In `tests/test_weave_cli.py`, replace the existing `merge` test body so it drive
         self.assertIn("claude --resume merged-123", out.getvalue())
 ```
 
-(`_core_mod` is already imported in this file as `from weave.core import core as _core_mod`.)
+(`_core_mod` is already imported in this file as `from ferry.core import core as _core_mod`.)
 
 - [ ] **Step 2: Run the CLI test to verify it fails**
 
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_weave_cli.py -q`
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_ferry_cli.py -q`
 Expected: FAIL — `AttributeError`/`TypeError` (no `core.merge` wired in the CLI yet; old `MergeResult` shape).
 
-- [ ] **Step 3: Update `weave/cli/cli.py` merge subcommand**
+- [ ] **Step 3: Update `ferry/cli/cli.py` merge subcommand**
 
 Replace the `merge` parser block:
 
@@ -783,20 +783,20 @@ with:
                   f"  resume: claude --resume {result.session_id}")
 ```
 
-- [ ] **Step 4: Delete the sidecar path in `weave/core/core.py` and rename the result**
+- [ ] **Step 4: Delete the sidecar path in `ferry/core/core.py` and rename the result**
 
-- Delete `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path`, the old `MergeResult` dataclass, and the module constants `_DEFAULT_MERGED_DIR`, `_WEAVE_MERGE_VERSION`, `_COMPATIBILITY_NOTE`.
+- Delete `merge_contexts`, `_write_merge_sidecar`, `_resolve_source_path`, the old `MergeResult` dataclass, and the module constants `_DEFAULT_MERGED_DIR`, `_FERRY_MERGE_VERSION`, `_COMPATIBILITY_NOTE`.
 - Remove now-unused imports if they are no longer referenced anywhere in the file: `tempfile`, `json` (check — `json` is still used by `_entry_key`, so keep `json`; `tempfile` and `datetime`/`timezone` were only for the sidecar — remove if unreferenced), `MergedContext`, `default_merger` (old), `ContextMerger`.
 - Rename the `MergedSession` dataclass to `MergeResult` and update its use in `merge`.
-- Replace the lazy `from weave.merge.briefing import default_briefing_merger` inside `merge` with the canonical `from weave.merge.factory import default_merger` and call `default_merger()` (the factory now returns the text `CerebrasMerger` after Step 6).
+- Replace the lazy `from ferry.merge.briefing import default_briefing_merger` inside `merge` with the canonical `from ferry.merge.factory import default_merger` and call `default_merger()` (the factory now returns the text `CerebrasMerger` after Step 6).
 
-- [ ] **Step 5: Update `weave/core/__init__.py`**
+- [ ] **Step 5: Update `ferry/core/__init__.py`**
 
-Re-export `merge` and `MergeResult`; remove `merge_contexts` and `MergedSession`. Final list: `MergeResult, WeaveError, ls, merge, pull, push, remote_add`.
+Re-export `merge` and `MergeResult`; remove `merge_contexts` and `MergedSession`. Final list: `MergeResult, FerryError, ls, merge, pull, push, remote_add`.
 
 - [ ] **Step 6: Canonicalize the merge layer (move briefing → canonical files, delete old)**
 
-- `weave/merge/protocols.py`: replace `ContextMerger` with the text contract:
+- `ferry/merge/protocols.py`: replace `ContextMerger` with the text contract:
 
 ```python
 """Merge-layer plug-in point."""
@@ -805,7 +805,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from weave.context.types import ChatContext
+from ferry.context.types import ChatContext
 
 
 class ContextMerger(Protocol):
@@ -820,23 +820,23 @@ class ContextMerger(Protocol):
         ...
 ```
 
-- `weave/merge/prompt.py`: replace its contents with the `build_merge_prompt(shared_context, a_branch, b_branch)` function — identical body to `build_briefing_prompt` from `briefing.py` (copy it verbatim, rename the function to `build_merge_prompt`). Delete the old `_MERGE_OUTPUT_SCHEMA` and the old `build_merge_prompt`.
-- `weave/merge/cerebras.py`: replace `CerebrasMerger` with the body of `BriefingMerger` (rename class to `CerebrasMerger`), importing `build_merge_prompt` from `weave.merge.prompt`. Remove the `parse`/`validator`/`MergedContext` imports and the `feedback` handling.
-- `weave/merge/stub.py`: replace its contents with `StubMerger` = the body of `StubBriefingMerger` (rename class to `StubMerger`). Delete all the old `MergedContext` helper functions.
-- `weave/merge/factory.py`: `default_merger(*, client=None) -> ContextMerger` returns `CerebrasMerger(client=client)` when configured (the existing body already does this; just confirm the return type is the text `CerebrasMerger`).
-- `weave/merge/exceptions.py`: update `MergeResponseError` docstring to "Model output was empty or unusable."
-- Delete files: `weave/merge/types.py`, `weave/merge/validator.py`, `weave/merge/parse.py`, `weave/merge/briefing.py`.
-- `weave/merge/__init__.py`: final exports only:
+- `ferry/merge/prompt.py`: replace its contents with the `build_merge_prompt(shared_context, a_branch, b_branch)` function — identical body to `build_briefing_prompt` from `briefing.py` (copy it verbatim, rename the function to `build_merge_prompt`). Delete the old `_MERGE_OUTPUT_SCHEMA` and the old `build_merge_prompt`.
+- `ferry/merge/cerebras.py`: replace `CerebrasMerger` with the body of `BriefingMerger` (rename class to `CerebrasMerger`), importing `build_merge_prompt` from `ferry.merge.prompt`. Remove the `parse`/`validator`/`MergedContext` imports and the `feedback` handling.
+- `ferry/merge/stub.py`: replace its contents with `StubMerger` = the body of `StubBriefingMerger` (rename class to `StubMerger`). Delete all the old `MergedContext` helper functions.
+- `ferry/merge/factory.py`: `default_merger(*, client=None) -> ContextMerger` returns `CerebrasMerger(client=client)` when configured (the existing body already does this; just confirm the return type is the text `CerebrasMerger`).
+- `ferry/merge/exceptions.py`: update `MergeResponseError` docstring to "Model output was empty or unusable."
+- Delete files: `ferry/merge/types.py`, `ferry/merge/validator.py`, `ferry/merge/parse.py`, `ferry/merge/briefing.py`.
+- `ferry/merge/__init__.py`: final exports only:
 
 ```python
 """Merge layer: text-briefing mergers implementing :class:`ContextMerger`."""
 
-from weave.merge.cerebras import CerebrasMerger
-from weave.merge.exceptions import MergeClientError, MergeError, MergeResponseError
-from weave.merge.factory import default_merger
-from weave.merge.prompt import build_merge_prompt
-from weave.merge.protocols import ContextMerger
-from weave.merge.stub import StubMerger
+from ferry.merge.cerebras import CerebrasMerger
+from ferry.merge.exceptions import MergeClientError, MergeError, MergeResponseError
+from ferry.merge.factory import default_merger
+from ferry.merge.prompt import build_merge_prompt
+from ferry.merge.protocols import ContextMerger
+from ferry.merge.stub import StubMerger
 
 __all__ = [
     "CerebrasMerger",
@@ -853,14 +853,14 @@ __all__ = [
 - [ ] **Step 7: Update tests to the canonical names and delete dead test files**
 
 - Delete `tests/test_merge_types.py` (the `MergedContext` schema is gone).
-- Delete `tests/test_merge_e2e.py` (superseded by `tests/test_weave_merge.py`).
-- `tests/test_merge_briefing.py`: rename imports `BriefingMerger → CerebrasMerger`, `StubBriefingMerger → StubMerger`, `build_briefing_prompt → build_merge_prompt`, all from `weave.merge`. Rename the test classes accordingly (e.g. `BriefingMergerTests → CerebrasMergerTests`). Rename the file to `tests/test_merge_layer.py`.
-- `tests/test_weave_merge.py`: change `from weave.merge.briefing import StubBriefingMerger` to `from weave.merge import StubMerger` and replace `StubBriefingMerger()` with `StubMerger()`.
-- `tests/test_merge_pipeline.py`: reduce to the `WeaveImportBoundaryTests` class only. Replace the top-of-file imports with exactly:
+- Delete `tests/test_merge_e2e.py` (superseded by `tests/test_ferry_merge.py`).
+- `tests/test_merge_briefing.py`: rename imports `BriefingMerger → CerebrasMerger`, `StubBriefingMerger → StubMerger`, `build_briefing_prompt → build_merge_prompt`, all from `ferry.merge`. Rename the test classes accordingly (e.g. `BriefingMergerTests → CerebrasMergerTests`). Rename the file to `tests/test_merge_layer.py`.
+- `tests/test_ferry_merge.py`: change `from ferry.merge.briefing import StubBriefingMerger` to `from ferry.merge import StubMerger` and replace `StubBriefingMerger()` with `StubMerger()`.
+- `tests/test_merge_pipeline.py`: reduce to the `FerryImportBoundaryTests` class only. Replace the top-of-file imports with exactly:
 
 ```python
-"""Boundary test: weave must reach the private transcript engine only via the
-public weave.transcript surface.
+"""Boundary test: ferry must reach the private transcript engine only via the
+public ferry.transcript surface.
 
 Run (from repo root):  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/test_merge_pipeline.py -q
 """
@@ -869,10 +869,10 @@ import ast
 import unittest
 from pathlib import Path
 
-_WEAVE_ROOT = Path(__file__).resolve().parent.parent / "weave"
+_FERRY_ROOT = Path(__file__).resolve().parent.parent / "ferry"
 ```
 
-Keep the `WeaveImportBoundaryTests` class and the `if __name__ == "__main__"` block; delete every other class and any `merge_test_fixtures`/`MergedContext`/`CerebrasMerger` references in the file.
+Keep the `FerryImportBoundaryTests` class and the `if __name__ == "__main__"` block; delete every other class and any `merge_test_fixtures`/`MergedContext`/`CerebrasMerger` references in the file.
 - `tests/merge_test_fixtures.py`: delete everything that references `MergedContext`/`SourceRef`/`MergedDecision` and the `ChatContext` sample/`merged_dict_for_contexts` helpers. Keep only what surviving tests still import. After this task, check usage: `grep -rn "merge_test_fixtures" tests/` — if nothing imports it, delete the file.
 
 - [ ] **Step 8: Run the full suite**
@@ -880,7 +880,7 @@ Keep the `WeaveImportBoundaryTests` class and the `if __name__ == "__main__"` bl
 Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q`
 Expected: green. Then confirm no dangling references:
 
-Run: `grep -rn "MergedContext\|merge_contexts\|validate_merged_context\|parse_merged_response\|MergedSession\|BriefingMerger\|sidecar" weave tests`
+Run: `grep -rn "MergedContext\|merge_contexts\|validate_merged_context\|parse_merged_response\|MergedSession\|BriefingMerger\|sidecar" ferry tests`
 Expected: no matches.
 
 - [ ] **Step 9: Commit**
@@ -900,13 +900,13 @@ Rewrites the one gated integration test to assert briefing text + a resumable me
 - Modify: `tests/test_cerebras_integration.py`
 
 **Interfaces:**
-- Consumes: `weave.core.merge`, `weave.merge.CerebrasMerger`, `weave.merge.env` gating helpers, `weave.merge.exceptions`.
+- Consumes: `ferry.core.merge`, `ferry.merge.CerebrasMerger`, `ferry.merge.env` gating helpers, `ferry.merge.exceptions`.
 
 - [ ] **Step 1: Rewrite the integration test**
 
 Replace the body so the gated test (skipped unless `CEREBRAS_API_KEY` is set) drives a real merge of two fixture JSONLs through `core.merge` with a real `CerebrasMerger`, and asserts:
 - the call returns a `MergeResult` with a non-empty `session_id`,
-- the written JSONL round-trips through `weave.transcript` as a single linear chain,
+- the written JSONL round-trips through `ferry.transcript` as a single linear chain,
 - exactly one `Read` tool cycle is present and its `tool_result` content is non-empty text.
 
 Use the existing skip guard pattern:
@@ -915,7 +915,7 @@ Use the existing skip guard pattern:
 import os
 import unittest
 
-from weave.merge.env import cerebras_configured
+from ferry.merge.env import cerebras_configured
 
 
 @unittest.skipUnless(cerebras_configured(), "CEREBRAS_API_KEY/CEREBRAS_MODEL not set")
@@ -923,7 +923,7 @@ class CerebrasMergeIntegrationTests(unittest.TestCase):
     ...
 ```
 
-Build two minimal fixture JSONL strings inline (a shared prefix + one divergent turn each, like `_VALID_A`/`_VALID_B` in `tests/test_weave_merge.py`), write them to a temp dir, point `CLAUDE_CONFIG_DIR` at the temp dir, call `core.merge(...)` with no `merger=` (real client), and assert as above. Remove all `MergedContext`/`validate_merged_context`/`MERGE_SCHEMA_VERSION` imports and assertions.
+Build two minimal fixture JSONL strings inline (a shared prefix + one divergent turn each, like `_VALID_A`/`_VALID_B` in `tests/test_ferry_merge.py`), write them to a temp dir, point `CLAUDE_CONFIG_DIR` at the temp dir, call `core.merge(...)` with no `merger=` (real client), and assert as above. Remove all `MergedContext`/`validate_merged_context`/`MERGE_SCHEMA_VERSION` imports and assertions.
 
 - [ ] **Step 2: Run the integration test**
 
@@ -947,10 +947,10 @@ git commit -m "test: gated real-Cerebras integration test for resumable merge"
 ## Notes for the implementer
 
 - **Why the temporary names.** `briefing.py`, `BriefingMerger`/`StubBriefingMerger`, and `MergedSession` exist only so Tasks 2–3 can land green alongside the old `MergedContext` path. Task 4 deletes the old path and renames these to their canonical forms (`cerebras.py`/`stub.py`, `CerebrasMerger`/`StubMerger`, `MergeResult`). Don't skip the rename — the spec's public surface uses the canonical names.
-- **`CLAUDE_CONFIG_DIR`.** `weave.connector.projects_root()` honors `$CLAUDE_CONFIG_DIR`; tests set it to a temp dir so no real `~/.claude` is touched. This is how the merge write is sandboxed.
+- **`CLAUDE_CONFIG_DIR`.** `ferry.connector.projects_root()` honors `$CLAUDE_CONFIG_DIR`; tests set it to a temp dir so no real `~/.claude` is touched. This is how the merge write is sandboxed.
 - **Order of operations in `core.merge`.** The merge-layer call happens *before* any clone edit or write, so a Cerebras failure (`MergeClientError`/`MergeResponseError`) aborts with nothing written — matching the spec's error-handling guarantees.
 - **Known caveat (accepted).** When the shared prefix is empty, the merged transcript begins with an assistant tool cycle rather than a user turn. This is intentional per the spec's "leave it empty" decision.
 
 ## Out of scope (follow-up, not this plan)
 
-The README still documents the SSH WeaveHub and the sidecar merge. After this lands, update the README "Merge pipeline"/"Write" stage and error-handling rows to describe the resumable-clone behavior. Tracked separately.
+The README still documents the SSH FerryHub and the sidecar merge. After this lands, update the README "Merge pipeline"/"Write" stage and error-handling rows to describe the resumable-clone behavior. Tracked separately.

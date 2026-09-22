@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      WEAVE_HUB_PASSWORD: ${WEAVE_HUB_PASSWORD:?set WEAVE_HUB_PASSWORD}
+      FERRY_HUB_PASSWORD: ${FERRY_HUB_PASSWORD:?set FERRY_HUB_PASSWORD}
     volumes:
       - ./chats:/data
     restart: unless-stopped

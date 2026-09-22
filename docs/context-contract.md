@@ -1,6 +1,6 @@
 # Context contract handoff
 
-Team contract for the merge pipeline. Types live in `weave/context/types.py`, `weave/merge/types.py`, and `weave/merge/protocols.py`.
+Team contract for the merge pipeline. Types live in `ferry/context/types.py`, `ferry/merge/types.py`, and `ferry/merge/protocols.py`.
 
 ## Data flow
 
@@ -49,7 +49,7 @@ Each stage owns one transformation. Downstream code must not skip layers (e.g. m
 
 **Must do**
 
-- Implement `ContextMerger` (`weave/merge/protocols.py`).
+- Implement `ContextMerger` (`ferry/merge/protocols.py`).
 - Return semantic merge output: summary, decisions, conflicts, assumptions, todos, `file_refs`, rerun lists, `bootstrap_prompt`, `sources`.
 - Attribute decisions with `sources: ["a"]`, `["b"]`, or `["a", "b"]` — never `"both"`.
 - Populate `SourceRef` with `side`, `source_label`, `session_id`, `git_branch`, `leaf_uuid`.
@@ -95,7 +95,7 @@ Parser output must satisfy:
 | Serializable | `ChatContext.from_dict(ctx.to_dict())` round-trips |
 | Deterministic | Same JSONL input → same context (except optional `distilled_at`) |
 
-Reference: `weave/context/types.py`, tests in `test_context_types.py`.
+Reference: `ferry/context/types.py`, tests in `test_context_types.py`.
 
 ---
 
@@ -112,7 +112,7 @@ Merge output must satisfy:
 | `bootstrap_prompt` | Non-empty seed text for the synthesizer's first user message(s) |
 | Serializable | `MergedContext.from_dict(ctx.to_dict())` round-trips |
 
-Reference: `weave/merge/types.py`, example fixture at `fixtures/merge/merged_context_minimal.json`, tests in `test_merge_types.py`.
+Reference: `ferry/merge/types.py`, example fixture at `fixtures/merge/merged_context_minimal.json`, tests in `test_merge_types.py`.
 
 ---
 
@@ -122,7 +122,7 @@ Reference: `weave/merge/types.py`, example fixture at `fixtures/merge/merged_con
 
 ```python
 import json
-from weave.context.types import ChatContext
+from ferry.context.types import ChatContext
 
 with open("fixtures/context/chat_context_a.json") as f:
     context_a = ChatContext.from_dict(json.load(f))
@@ -131,8 +131,8 @@ with open("fixtures/context/chat_context_a.json") as f:
 ### Call `ContextMerger.merge`
 
 ```python
-from weave.context.types import ChatContext
-from weave.merge.types import MergedContext
+from ferry.context.types import ChatContext
+from ferry.merge.types import MergedContext
 
 # cerebras_merger implements ContextMerger (future)
 merged: MergedContext = cerebras_merger.merge(context_a, context_b)
@@ -145,7 +145,7 @@ merged = cerebras_merger.merge(context_a, context_b, feedback="Keep session B's 
 
 ```python
 import transcript_api as tx
-from weave.merge.types import MergedContext
+from ferry.merge.types import MergedContext
 
 def seed_transcript(entries: list, merged: MergedContext) -> tuple[list, list]:
     entries, created = tx.create_at_end(

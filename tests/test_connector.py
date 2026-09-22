@@ -1,4 +1,4 @@
-"""Tests for weave.connector — no real ~/.claude is ever touched.
+"""Tests for ferry.connector — no real ~/.claude is ever touched.
 
 Run:  python3 -m pytest tests/test_connector.py -v
 """
@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from weave import connector as cc
+from ferry import connector as cc
 
 
 class _ConnectorBase(unittest.TestCase):

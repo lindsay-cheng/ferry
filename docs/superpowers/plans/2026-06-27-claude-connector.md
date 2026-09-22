@@ -4,7 +4,7 @@
 
 **Goal:** Build `claude_connector.py` — a dumb local-filesystem I/O boundary that maps a Claude Code session id ↔ a file path on a unix `~/.claude` and moves bytes in and out.
 
-**Architecture:** A single stdlib-only module of pure functions. Path mechanics (`projects_root`, `encode_cwd`, `session_path`) compute where files live; I/O functions (`resolve`, `read_text`, `write_text`, `list_sessions`) read and write bytes. No JSON parsing, no field rewriting, no id generation — those belong to the future `weave` layer. The module has no dependency on the transcript core.
+**Architecture:** A single stdlib-only module of pure functions. Path mechanics (`projects_root`, `encode_cwd`, `session_path`) compute where files live; I/O functions (`resolve`, `read_text`, `write_text`, `list_sessions`) read and write bytes. No JSON parsing, no field rewriting, no id generation — those belong to the future `ferry` layer. The module has no dependency on the transcript core.
 
 **Tech Stack:** Python 3, stdlib only (`os`, `re`, `tempfile`, `pathlib`). Tests use stdlib `unittest`, matching the existing `test_transcript.py` style.
 
@@ -119,7 +119,7 @@ Create `claude_connector.py`:
 
 A dumb I/O boundary: translate a Claude Code session id <-> a file path on a
 unix ~/.claude, and move bytes in and out of those paths. No JSON parsing, no
-field rewriting, no session-id generation -- those live in the weave layer.
+field rewriting, no session-id generation -- those live in the ferry layer.
 
 Storage base honors $CLAUDE_CONFIG_DIR if set, else ~/.claude. Stdlib only.
 """

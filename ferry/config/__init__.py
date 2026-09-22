@@ -1,4 +1,4 @@
-from weave.config.config import (
+from ferry.config.config import (
     DEFAULT_PATH,
     add_remote,
     append_log,
