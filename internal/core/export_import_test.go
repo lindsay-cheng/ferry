@@ -279,6 +279,18 @@ func TestImportNoPathOneFileInDownloads(t *testing.T) {
 	}
 }
 
+func TestIsTerminalPipeIsNotTTY(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	if isTerminal(r) {
+		t.Fatal("pipe read end should not be a terminal")
+	}
+}
+
 func TestImportNoPathTwoFilesNonTTYListsAndRaises(t *testing.T) {
 	b := newExportImportBase(t)
 	b.chdir(b.tmp)

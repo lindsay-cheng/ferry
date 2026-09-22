@@ -10,8 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/lindsay-cheng/ferry/internal/connector"
 )
+
+func isTerminal(f *os.File) bool {
+	return term.IsTerminal(int(f.Fd()))
+}
 
 // ImportOptions controls import path discovery when file is omitted.
 type ImportOptions struct {
@@ -149,8 +155,7 @@ func resolveImportPath(file string, opts ImportOptions) (string, error) {
 	if opts.StdinIsTTY != nil {
 		isTTY = *opts.StdinIsTTY
 	} else {
-		fi, err := os.Stdin.Stat()
-		isTTY = err == nil && (fi.Mode()&os.ModeCharDevice) != 0
+		isTTY = isTerminal(os.Stdin)
 	}
 	if !isTTY {
 		return "", &FerryError{Msg: "multiple .jsonl files — pass a path or a number"}
@@ -162,6 +167,9 @@ func resolveImportPath(file string, opts ImportOptions) (string, error) {
 		fmt.Fprint(os.Stdout, "Choice [1]: ")
 		var line string
 		if _, err := fmt.Scanln(&line); err != nil && !strings.Contains(err.Error(), "unexpected newline") {
+			if err == io.EOF {
+				return "", &FerryError{Msg: "multiple .jsonl files — pass a path or a number"}
+			}
 			return "", err
 		}
 		choice = strings.TrimSpace(line)
