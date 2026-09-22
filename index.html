@@ -19,12 +19,12 @@
   <h2>Install (Mac, Homebrew)</h2>
   <pre><code>brew tap lindsay-cheng/ferry https://github.com/lindsay-cheng/ferry
 brew install ferry</code></pre>
-  <p class="note">Homebrew needs a public GitHub repo and a git tag. Until then, use curl or pipx below.</p>
+  <p class="note">Homebrew needs a public GitHub repo and a git tag. Until then, use curl or build from a clone below.</p>
 
   <h2>Install (curl)</h2>
   <pre><code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash</code></pre>
   <p class="note">Checks only (no install): <code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash -s -- --check</code></p>
-  <p class="note">If the GitHub repo is private and curl returns 404, clone the repo and run <code>./install.sh</code>, or <code>pipx install git+https://github.com/lindsay-cheng/ferry.git</code>.</p>
+  <p class="note">If the GitHub repo is private and curl returns 404, clone the repo with your GitHub access and run <code>./install.sh</code> from the repo root.</p>
 
   <h2>Move a chat with a file</h2>
   <p>On computer A, export the chat:</p>

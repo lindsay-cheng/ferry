@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# curl|bash installer; pipx or pip --user, no clone step
+# curl|bash installer; builds a Go binary into ~/.local/bin
 set -euo pipefail
 
 REPO="https://github.com/lindsay-cheng/ferry.git"
-PKG="git+${REPO}"
+INSTALL_DIR="${HOME}/.local/bin"
+BINARY="${INSTALL_DIR}/ferry"
 
 check_only=false
 if [[ "${1:-}" == "--check" ]]; then
@@ -15,13 +16,14 @@ case "$(uname -s)" in
   *) echo "ferry install supports macOS and Linux only"; exit 1 ;;
 esac
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found; install Python 3.11+"
+if ! command -v go >/dev/null 2>&1; then
+  echo "go not found; install Go 1.22+ from https://go.dev/dl/"
   exit 1
 fi
 
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
-  echo "Python 3.11+ required (found $(python3 -V 2>&1))"
+go_minor="$(go version | sed -n 's/.*go1\.\([0-9]*\).*/\1/p')"
+if [[ -z "${go_minor}" ]] || [[ "${go_minor}" -lt 22 ]]; then
+  echo "Go 1.22+ required (found $(go version))"
   exit 1
 fi
 
@@ -35,12 +37,26 @@ if $check_only; then
   exit 0
 fi
 
-if command -v pipx >/dev/null 2>&1; then
-  pipx install --force "$PKG"
-  echo "installed ferry (pipx). run: ferry help"
+mkdir -p "${INSTALL_DIR}"
+
+if [[ -f go.mod ]] && [[ -d cmd/ferry ]]; then
+  go build -o "${BINARY}" ./cmd/ferry
 else
-  python3 -m pip install --user "$PKG"
-  bindir="$(python3 -m site --user-base)/bin"
-  echo "installed ferry. add to PATH if needed: export PATH=\"${bindir}:\$PATH\""
-  echo "then run: ferry help"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "${tmp}"' EXIT
+  if ! git clone --depth 1 "${REPO}" "${tmp}/ferry"; then
+    echo "clone failed; if the repo is private, clone it with your GitHub access and run ./install.sh from the repo root"
+    exit 1
+  fi
+  (cd "${tmp}/ferry" && go build -o "${BINARY}" ./cmd/ferry)
 fi
+
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    echo "add ${INSTALL_DIR} to PATH, for example:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+    ;;
+esac
+
+echo "installed ferry to ${BINARY}. run: ferry help"

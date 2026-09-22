@@ -1,7 +1,5 @@
 class Ferry < Formula
-  include Language::Python::Virtualenv
-
-  desc "Share a Claude Code session as a file. HTTP hub is optional."
+  desc "Share a Claude Code session as a file"
   homepage "https://github.com/lindsay-cheng/ferry"
   license "MIT"
 
@@ -10,10 +8,10 @@ class Ferry < Formula
 
   head "https://github.com/lindsay-cheng/ferry.git", branch: "main"
 
-  depends_on "python@3.11"
+  depends_on "go" => :build
 
   def install
-    virtualenv_install_with_resources
+    system "go", "build", *std_go_args(ldflags: "-s -w"), "./cmd/ferry"
   end
 
   test do
