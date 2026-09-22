@@ -14,15 +14,25 @@
 </head>
 <body>
   <h1>ferry</h1>
-  <p>Share Claude Code sessions between machines. Mac/Linux, Python 3.11+.</p>
-  <p>Ferry moves the conversation, not git.</p>
+  <p>Copy a Claude Code chat as a <code>.jsonl</code> file from one computer to another. Git still moves the source code. Ferry packs and unpacks the conversation file.</p>
 
-  <h2>Install</h2>
+  <h2>Install (Mac, Homebrew)</h2>
+  <pre><code>brew tap lindsay-cheng/ferry https://github.com/lindsay-cheng/ferry
+brew install ferry</code></pre>
+  <p class="note">Homebrew needs a public GitHub repo and a git tag. Until then, use curl or pipx below.</p>
+
+  <h2>Install (curl)</h2>
   <pre><code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash</code></pre>
-
   <p class="note">Checks only (no install): <code>curl -fsSL https://raw.githubusercontent.com/lindsay-cheng/ferry/main/install.sh | bash -s -- --check</code></p>
+  <p class="note">If the GitHub repo is private and curl returns 404, clone the repo and run <code>./install.sh</code>, or <code>pipx install git+https://github.com/lindsay-cheng/ferry.git</code>.</p>
 
-  <p class="note">If the GitHub repo is private and curl 404s, clone the repo and run <code>./install.sh</code>, or <code>pipx install git+https://github.com/lindsay-cheng/ferry.git</code>.</p>
+  <h2>Move a chat with a file</h2>
+  <p>On computer A, export the chat:</p>
+  <pre><code>ferry export auth-refactor</code></pre>
+  <p>Send the <code>auth-refactor.jsonl</code> file (Slack, AirDrop, email, USB). Ferry does not upload it.</p>
+  <p>On computer B, import and open in Claude:</p>
+  <pre><code>ferry import -o</code></pre>
+  <p class="note">The jsonl is the raw chat, including secrets pasted into Claude. Do not commit the export.</p>
 
   <p><a href="https://github.com/lindsay-cheng/ferry#readme">Full documentation (README)</a></p>
 </body>
