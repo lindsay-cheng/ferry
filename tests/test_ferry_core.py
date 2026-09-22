@@ -8,6 +8,8 @@ Two layers of coverage:
 Run (from repo root):  python3 -m pytest tests/test_ferry_core.py
 """
 
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -294,7 +296,9 @@ class RewriteAndPullTests(_FerryBase):
             warnings.simplefilter("always")
             new_id = core.pull("origin", "auth", cwd=self.cwd,
                                server=fake, config_path=self.cfg)
-        self.assertEqual(len(caught), 1)
+        skipped = [w for w in caught
+                   if "skipping invalid JSON" in str(w.message)]
+        self.assertEqual(len(skipped), 1)
         path = cc.session_path(self.cwd, new_id)
         self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 1)
 
@@ -486,6 +490,170 @@ class WalkUpTests(_FerryBase):
         core.remote_add("origin", "u@h:/p")
         self.assertTrue((self.src / ".ferry" / "config").is_file())
         self.assertEqual(config.get_remote("origin"), "u@h:/p")
+
+
+class ExportImportTests(_FerryBase):
+    def setUp(self):
+        super().setUp()
+        self.home_patcher = mock.patch.dict(
+            os.environ, {"HOME": str(self.tmp)})
+        self.home_patcher.start()
+        self.addCleanup(self.home_patcher.stop)
+        (self.tmp / "Downloads").mkdir()
+        self._orig_cwd = os.getcwd()
+        self.addCleanup(lambda: os.chdir(self._orig_cwd))
+
+    def _seed_session(self, cwd, session_id, text):
+        cc.write_text(cc.session_path(cwd, session_id), text)
+
+    def test_export_writes_named_file_and_skips_truncated_last_line(self):
+        os.chdir(self.tmp)
+        chat = str(self.tmp.resolve())
+        text = '{"uuid":"x"}\n{"truncated":'
+        self._seed_session(chat, "sess-1", text)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            path = core.export("My-Chat", "sess-1")
+        self.assertEqual(Path(path), (self.tmp / "my-chat.jsonl").resolve())
+        self.assertEqual((self.tmp / "my-chat.jsonl").read_text(encoding="utf-8"),
+                         '{"uuid":"x"}\n')
+        self.assertEqual(len(caught), 1)
+
+    def test_export_two_local_chats_without_session_raises(self):
+        os.chdir(self.tmp)
+        chat = str(self.tmp.resolve())
+        self._seed_session(chat, "old-sess", '{"uuid":"old"}\n')
+        self._seed_session(chat, "new-sess", '{"uuid":"new"}\n')
+        with self.assertRaises(core.FerryError) as ctx:
+            core.export("chat", None)
+        msg = str(ctx.exception)
+        self.assertIn(chat, msg)
+        self.assertIn("old-sess", msg)
+        self.assertIn("new-sess", msg)
+
+    def test_export_without_ferry_uses_cwd(self):
+        os.chdir(self.tmp)
+        chat = str(self.tmp.resolve())
+        self._seed_session(chat, "only", '{"uuid":"o"}\n')
+        path = core.export("solo", None)
+        self.assertEqual((self.tmp / "solo.jsonl").read_text(encoding="utf-8"),
+                         '{"uuid":"o"}\n')
+        self.assertTrue(path.endswith("solo.jsonl"))
+
+    def test_export_from_nested_dir_uses_project_root(self):
+        repo = self.tmp / "repo"
+        src = repo / "app" / "src"
+        src.mkdir(parents=True)
+        cfg = repo / ".ferry" / "config"
+        core.remote_add("origin", "u@h:/p", path=cfg)
+        project = str(repo.resolve())
+        self._seed_session(project, "only", '{"uuid":"o"}\n')
+        os.chdir(src)
+        path = core.export("nested", None)
+        self.assertEqual((src / "nested.jsonl").read_text(encoding="utf-8"),
+                         '{"uuid":"o"}\n')
+        self.assertTrue(path.endswith("nested.jsonl"))
+
+    def test_export_existing_file_raises(self):
+        os.chdir(self.tmp)
+        self._seed_session(str(self.tmp.resolve()), "s1", '{"uuid":"x"}\n')
+        (self.tmp / "chat.jsonl").write_text("old\n", encoding="utf-8")
+        with self.assertRaises(core.FerryError):
+            core.export("chat", "s1")
+
+    def test_import_with_path_rewrites_and_keeps_extra_types(self):
+        os.chdir(self.tmp)
+        (self.tmp / "in.jsonl").write_text(_EXTRA_TYPES_TEXT, encoding="utf-8")
+        new_id, cwd = core.import_session(str(self.tmp / "in.jsonl"))
+        path = cc.session_path(cwd, new_id)
+        types = [json.loads(l)["type"]
+                 for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        self.assertEqual(types, [
+            "ai-title", "file-history-snapshot", "mode", "permission-mode",
+            "user"])
+        for e in [json.loads(l) for l in
+                  path.read_text(encoding="utf-8").splitlines() if l.strip()]:
+            if "cwd" in e or "sessionId" in e:
+                self.assertEqual(e["cwd"], cwd)
+                self.assertEqual(e["sessionId"], new_id)
+
+    def test_import_no_path_one_file_in_cwd(self):
+        os.chdir(self.tmp)
+        (self.tmp / "solo.jsonl").write_text(_VALID_ENTRY, encoding="utf-8")
+        new_id, _ = core.import_session(None, stdin_is_tty=False)
+        self.assertTrue(cc.session_path(str(self.tmp.resolve()), new_id).is_file())
+
+    def test_import_no_path_one_file_in_downloads(self):
+        (self.tmp / "empty").mkdir(exist_ok=True)
+        os.chdir(self.tmp / "empty")
+        (self.tmp / "Downloads" / "solo.jsonl").write_text(
+            _VALID_ENTRY, encoding="utf-8")
+        new_id, cwd = core.import_session(None, stdin_is_tty=False)
+        self.assertEqual(cwd, str((self.tmp / "empty").resolve()))
+        self.assertTrue(cc.session_path(cwd, new_id).is_file())
+
+    def test_import_no_path_two_files_non_tty_lists_and_raises(self):
+        os.chdir(self.tmp)
+        a = self.tmp / "a.jsonl"
+        b = self.tmp / "b.jsonl"
+        a.write_text(_VALID_ENTRY, encoding="utf-8")
+        b.write_text(_VALID_ENTRY, encoding="utf-8")
+        os.utime(a, (1, 1))
+        os.utime(b, (2, 2))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with self.assertRaises(core.FerryError) as ctx:
+                core.import_session(None, stdin_is_tty=False)
+        text = out.getvalue()
+        self.assertIn("1.", text)
+        self.assertIn("2.", text)
+        self.assertIn("a.jsonl", text)
+        self.assertIn("b.jsonl", text)
+        self.assertIn("pass a path or a number", str(ctx.exception))
+
+    def test_import_no_path_tty_empty_choice_picks_first(self):
+        os.chdir(self.tmp)
+        a = self.tmp / "a.jsonl"
+        b = self.tmp / "b.jsonl"
+        a.write_text(_VALID_ENTRY, encoding="utf-8")
+        b.write_text('{"uuid":"b"}\n', encoding="utf-8")
+        os.utime(a, (2, 2))
+        os.utime(b, (1, 1))
+        with mock.patch("builtins.input", return_value=""):
+            new_id, _ = core.import_session(None, stdin_is_tty=True)
+        self.assertTrue(cc.session_path(str(self.tmp.resolve()), new_id).is_file())
+
+    def test_import_without_ferry_config(self):
+        os.chdir(self.tmp)
+        (self.tmp / "in.jsonl").write_text(_VALID_ENTRY, encoding="utf-8")
+        new_id, cwd = core.import_session(str(self.tmp / "in.jsonl"))
+        self.assertEqual(cwd, str(self.tmp.resolve()))
+        self.assertTrue(cc.session_path(cwd, new_id).is_file())
+
+    def test_export_import_roundtrip(self):
+        os.chdir(self.tmp)
+        chat = str(self.tmp.resolve())
+        self._seed_session(chat, "sess-1", _VALID_ENTRY)
+        export_path = core.export("trip", "sess-1")
+        other = self.tmp / "other"
+        other.mkdir()
+        os.chdir(other)
+        new_id, cwd = core.import_session(export_path)
+        self.assertEqual(cwd, str(other.resolve()))
+        path = cc.session_path(cwd, new_id)
+        self.assertTrue(path.is_file())
+        entry = json.loads(path.read_text(encoding="utf-8").strip())
+        self.assertEqual(entry["cwd"], cwd)
+        self.assertEqual(entry["sessionId"], new_id)
+
+    def test_export_clipboard_failure_still_writes(self):
+        os.chdir(self.tmp)
+        self._seed_session(str(self.tmp.resolve()), "s1", '{"uuid":"x"}\n')
+        with mock.patch.object(_core_mod, "copy_file_to_clipboard",
+                               side_effect=OSError("nope")), \
+                mock.patch("ferry.core.core.sys.platform", "darwin"):
+            path = core.export("chat", "s1")
+        self.assertTrue(Path(path).is_file())
 
 
 class MissingCredentialsTests(_FerryBase):

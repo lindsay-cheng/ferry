@@ -7,6 +7,9 @@ from this package (``from ferry import core``) for the stable surface.
 
 from ferry.core.core import (
     FerryError,
+    copy_file_to_clipboard,
+    export,
+    import_session,
     log,
     ls,
     pull,
@@ -17,6 +20,9 @@ from ferry.core.core import (
 
 __all__ = [
     "FerryError",
+    "copy_file_to_clipboard",
+    "export",
+    "import_session",
     "log",
     "ls",
     "pull",

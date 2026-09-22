@@ -18,12 +18,16 @@ before writing anything locally.
 import importlib
 import json
 import os
+import subprocess
+import sys
 import uuid
 import warnings
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ferry import config
 from ferry import connector as cc
+from ferry.hub import normalize_name
 
 
 class FerryError(ValueError):
@@ -43,6 +47,26 @@ def _project_cwd(cwd, config_path):
         return str(config.project_dir(path=config_path))
     except ValueError as e:
         raise FerryError(str(e)) from e
+
+
+def _find_ferry_config():
+    d = Path(os.getcwd())
+    while True:
+        candidate = d / ".ferry" / "config"
+        if candidate.is_file():
+            return candidate
+        parent = d.parent
+        if parent == d:
+            return None
+        d = parent
+
+
+def _chat_cwd():
+    """Chat folder for export/import: project root when ``.ferry`` exists, else cwd."""
+    found = _find_ferry_config()
+    if found is not None:
+        return str(found.parent.parent.resolve())
+    return str(Path.cwd().resolve())
 
 
 def _resolve_remote(remote, *, path=None):
@@ -172,6 +196,109 @@ def _new_id():
     return str(uuid.uuid4())
 
 
+def _normalize_export_name(name):
+    """Validate and normalize an export basename (no ``.jsonl`` suffix)."""
+    if not name:
+        raise FerryError("name required")
+    base = name
+    if base.lower().endswith(".jsonl"):
+        base = base[:-6]
+    base = base.lower()
+    if not base or base in (".", "..") or "/" in base:
+        raise FerryError("name must be letters, numbers, and hyphen")
+    try:
+        return normalize_name(base)
+    except ValueError as e:
+        raise FerryError(str(e)) from e
+
+
+def copy_file_to_clipboard(path):
+    """Copy a file onto the clipboard (Darwin). Raises on failure."""
+    resolved = str(Path(path).resolve())
+    escaped = resolved.replace("\\", "\\\\").replace('"', '\\"')
+    subprocess.run(
+        ["osascript", "-e", f'set the clipboard to (POSIX file "{escaped}")'],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _write_imported_text(text, cwd, *, source="import"):
+    """Rewrite ``text`` into a fresh local session under ``cwd``; return new id."""
+    new_id = _new_id()
+    lines = text.splitlines(keepends=True)
+    if not lines and text:
+        lines = [text]
+    out = []
+    for i, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        if not line:
+            continue
+        rewritten = _rewrite_pull_line(line, new_id, cwd)
+        if rewritten is None:
+            if i == len(lines) - 1:
+                warnings.warn(
+                    f"skipping invalid JSON on last line of {source}")
+            continue
+        out.append(rewritten)
+    if not out:
+        raise FerryError("file has no chat history")
+    cc.write_text(cc.session_path(cwd, new_id), "".join(out))
+    return new_id
+
+
+def _jsonl_import_candidates():
+    """``*.jsonl`` files in cwd and ``~/Downloads``, newest mtime first."""
+    found = []
+    for folder in (Path.cwd(), Path.home() / "Downloads"):
+        if not folder.is_dir():
+            continue
+        for path in folder.iterdir():
+            if path.is_file() and path.suffix == ".jsonl":
+                if path.name.endswith(".crdownload"):
+                    continue
+                found.append(path)
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return found
+
+
+def _format_import_candidate(index, path):
+    return f"{index}. {path.parent} {path.name}"
+
+
+def _resolve_import_path(file=None, *, stdin_is_tty=None):
+    """Pick a jsonl path from ``file`` or cwd/Downloads discovery."""
+    if file is not None:
+        path = Path(file)
+        if not path.is_file():
+            raise FerryError(f"file not found: {file}")
+        return path
+    candidates = _jsonl_import_candidates()
+    if not candidates:
+        raise FerryError(
+            "no .jsonl file in current folder or Downloads — pass a path")
+    if len(candidates) == 1:
+        return candidates[0]
+    lines = [_format_import_candidate(i, p)
+             for i, p in enumerate(candidates, 1)]
+    listing = "\n".join(lines)
+    print(listing)
+    is_tty = stdin_is_tty if stdin_is_tty is not None else sys.stdin.isatty()
+    if not is_tty:
+        raise FerryError(
+            "multiple .jsonl files — pass a path or a number")
+    choice = input("Choice [1]: ").strip()
+    if not choice:
+        return candidates[0]
+    try:
+        n = int(choice)
+    except ValueError:
+        raise FerryError(f"invalid choice: {choice!r}")
+    if n < 1 or n > len(candidates):
+        raise FerryError(f"invalid choice: {n}")
+    return candidates[n - 1]
+
+
 def _rewrite_pull_line(line, new_id, cwd):
     """Rewrite cwd/sessionId on one jsonl line when present; None if invalid JSON."""
     try:
@@ -200,25 +327,7 @@ def pull(remote, name, *, cwd=None, server=None, config_path=None):
     svr = server or _load_server()
     text = _remote_call(svr.pull, url, name, action="pull", target=f"{remote}/{name}")
     cwd = _project_cwd(cwd, config_path)
-    new_id = _new_id()
-    lines = text.splitlines(keepends=True)
-    if not lines and text:
-        lines = [text]
-    out = []
-    for i, raw in enumerate(lines):
-        line = raw.rstrip("\r\n")
-        if not line:
-            continue
-        rewritten = _rewrite_pull_line(line, new_id, cwd)
-        if rewritten is None:
-            if i == len(lines) - 1:
-                warnings.warn(
-                    f"skipping invalid JSON on last line of session {name!r}")
-            continue
-        out.append(rewritten)
-    if not out:
-        raise FerryError(f"session {name!r} has no chat history")
-    cc.write_text(cc.session_path(cwd, new_id), "".join(out))
+    new_id = _write_imported_text(text, cwd, source=f"session {name!r}")
     _log_op("pull", remote, name, new_id, path=config_path)
     return new_id
 
@@ -265,3 +374,31 @@ def ls(remote=None, *, cwd=None, server=None, config_path=None):
     url = _remote_url(remote, path=config_path)
     svr = server or _load_server()
     return _remote_call(svr.list, url, action="ls", target=remote)
+
+
+def export(name, session_id=None):
+    """Write a local session to ``<name>.jsonl`` in the current directory."""
+    norm = _normalize_export_name(name)
+    chat_cwd = _chat_cwd()
+    session_id = _resolve_session(session_id, chat_cwd)
+    text = cc.read_text(session_id)
+    text = _prepare_push_text(text, session_id)
+    out_path = Path.cwd() / f"{norm}.jsonl"
+    if out_path.exists():
+        raise FerryError(f"{out_path.name} already exists")
+    out_path.write_text(text, encoding="utf-8")
+    if sys.platform == "darwin":
+        try:
+            copy_file_to_clipboard(out_path)
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    return str(out_path)
+
+
+def import_session(file=None, *, stdin_is_tty=None):
+    """Import a jsonl file into a fresh local session; return ``(new_id, cwd)``."""
+    path = _resolve_import_path(file, stdin_is_tty=stdin_is_tty)
+    text = path.read_text(encoding="utf-8")
+    cwd = _chat_cwd()
+    new_id = _write_imported_text(text, cwd)
+    return new_id, cwd

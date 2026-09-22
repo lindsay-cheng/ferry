@@ -123,6 +123,8 @@ class CliTests(CliBase):
             rc = cli.main(["help"])
         self.assertEqual(rc, 0)
         text = out.getvalue()
+        self.assertIn("export", text)
+        self.assertIn("import", text)
         self.assertIn("push", text)
         self.assertNotIn("merge", text)
         self.assertIn("log", text)
@@ -263,6 +265,37 @@ class CliTests(CliBase):
                 rc = cli.main(["pull", "auth"])
         self.assertEqual(rc, 0)
         opened.assert_not_called()
+
+
+class ExportImportCliTests(CliBase):
+    def setUp(self):
+        super().setUp()
+        self.home_patcher = mock.patch.dict(os.environ, {"HOME": str(self.tmp)})
+        self.home_patcher.start()
+        self.addCleanup(self.home_patcher.stop)
+        (self.tmp / "Downloads").mkdir()
+
+    def test_import_prints_written_folder(self):
+        (self.tmp / "in.jsonl").write_text(
+            '{"parentUuid":null,"type":"user","uuid":"u1","cwd":"/a",'
+            '"sessionId":"s","timestamp":"2026-06-26T10:00:00.000Z",'
+            '"message":{"role":"user","content":"hi"}}\n',
+            encoding="utf-8")
+        expected_folder = str(cc.session_path(self.cwd, "placeholder").parent)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = cli.main(["import", str(self.tmp / "in.jsonl")])
+        self.assertEqual(rc, 0)
+        self.assertIn(f"folder: {expected_folder}", out.getvalue())
+
+    def test_export_subcommand_writes_file(self):
+        cc.write_text(cc.session_path(self.cwd, "s1"), '{"uuid":"x"}\n')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = cli.main(["export", "mine", "--session", "s1"])
+        self.assertEqual(rc, 0)
+        self.assertTrue((self.repo / "mine.jsonl").is_file())
+        self.assertIn("mine.jsonl", out.getvalue())
 
 
 class WalkUpCliTests(CliBase):

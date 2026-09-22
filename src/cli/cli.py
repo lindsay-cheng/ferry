@@ -38,6 +38,8 @@ _FERRY_ART = (
 # [<...>] marks an optional field, <...> a placeholder the user fills in.
 _HELP_GROUPS = [
     ("share agent context across sessions", [
+        ("export <name> [--session <id>]", "Write a local session to a .jsonl file"),
+        ("import [<file>] [-o]", "Import a .jsonl file into a new local session"),
         ("push [<remote>] <name> [--session <id>]", "Upload a local session to a remote"),
         ("pull [<remote>] <name> [-o]", "Download a remote session locally"),
     ]),
@@ -90,6 +92,20 @@ def _render_help():
 def _build_parser():
     p = argparse.ArgumentParser(prog="ferry")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
+
+    ex = sub.add_parser("export", help="write a local session to a .jsonl file",
+                        description="Export a local session to <name>.jsonl in the current folder.")
+    ex.add_argument("name", metavar="<name>",
+                    help="letters, numbers, hyphen; stored lowercase")
+    ex.add_argument("--session", default=None, dest="session_id", metavar="<id>",
+                    help="local session id to export (omit when only one local chat)")
+
+    im = sub.add_parser("import", help="import a .jsonl file into a new local session",
+                        description="Import a .jsonl file into a fresh local Claude session.")
+    im.add_argument("file", nargs="?", default=None, metavar="<file>",
+                    help="path to a .jsonl file (omit to pick from cwd or Downloads)")
+    im.add_argument("-o", "--open", action="store_true", dest="open",
+                    help="open the session with 'claude --resume' after importing")
 
     sp = sub.add_parser("push", help="upload a local session to a remote",
                         description="Upload a local session to a remote under <name>.")
@@ -161,7 +177,17 @@ def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.cmd == "push":
+        if args.cmd == "export":
+            path = core.export(args.name, args.session_id)
+            print(path)
+        elif args.cmd == "import":
+            new_id, cwd = core.import_session(args.file)
+            folder = cc.session_path(cwd, new_id).parent
+            print(f"imported into {new_id}\n  folder: {folder}\n"
+                  f"  resume: claude --resume {new_id}")
+            if args.open:
+                _open_session(new_id)
+        elif args.cmd == "push":
             remote = core.push(args.remote, args.name, args.session_id)
             if args.session_id:
                 print(f"pushed {args.session_id} -> {remote}/{args.name}")
