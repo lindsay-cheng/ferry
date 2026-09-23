@@ -1,8 +1,12 @@
-![Ferry](assets/ferry.png)
+<p align="center">
+  <img src="assets/ferry.png" width="220" alt="Ferry">
+</p>
 
-# Ferry
+<h1 align="center">Ferry</h1>
 
-*Ferry moves your Claude Code session from one computer to another.*
+<p align="center">
+  <em>Ferry moves your Claude Code session from one computer to another.</em>
+</p>
 
 ---
 
