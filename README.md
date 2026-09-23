@@ -12,7 +12,7 @@
 
 Ferry preserves the exact agent state: thinking blocks, tool calls, attachments, and subagents, things that /compact erases.
 
-Ferry began as Weave at a hackathon with Alex Tan, Raiyan Haque, Sujal Thapa, and Lindsay Cheng.
+Ferry began as Weave at a hackathon by Alex Tan, Raiyan Haque, Sujal Thapa, and Lindsay Cheng.
 
 ## Install
 
