@@ -15,20 +15,6 @@ const Version = "0.1.0"
 
 const tagline = "git for your Claude Code agent context"
 
-const ferryArt = "\033[33m" +
-	"*%%*\n" +
-	"                    =**+  %@%%\n" +
-	"                    #@@%  %@@%\n" +
-	"               :%%%=#@%%=%%%%%%%%.\n" +
-	"               -%@%=%%@%=%@%@%@%@.\n" +
-	"                    #@%%  -==-\n" +
-	"                 +*******-%@%%:***:\n" +
-	"                .%@%@@%@@=%@%%-@%@-\n" +
-	"                 -=======:%@%%:===.\n" +
-	"                    #@@%  +##+\n" +
-	"                    *%%#" +
-	"\033[0m"
-
 type helpCmd struct {
 	sig  string
 	desc string
@@ -104,8 +90,6 @@ func renderHelp() string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString(ferryArt)
-	b.WriteString("\n\n")
 	b.WriteString("\033[1;36musage:\033[0m ferry <command> [<args>]\n\n")
 	b.WriteString("ferry -- ")
 	b.WriteString(tagline)
