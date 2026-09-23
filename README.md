@@ -92,8 +92,8 @@ The export is the raw session. If computer A pasted a secret into Claude, it is 
 
 Export names use letters, numbers, and hyphen. Ferry stores names in lowercase.
 
-## License
+Ferry began as "Weave" at a hackathon made by Alex Tan, Raiyan Haque, Sujal Thapa, and Lindsay Cheng.
 
-Ferry began as "Weave" at a hackathon with Alex Tan, Raiyan Haque, and Sujal Thapa.
+## License
 
 [MIT](LICENSE)
