@@ -162,6 +162,31 @@ func TestImportPrintsFolderAndResume(t *testing.T) {
 	if !strings.Contains(out, "resume: claude --resume") {
 		t.Fatalf("stdout = %q", out)
 	}
+	if strings.Contains(out, "imported into") {
+		t.Fatalf("stdout still leads with session id: %q", out)
+	}
+}
+
+func TestImportOpenOmitsResumeLine(t *testing.T) {
+	b := newCLIBase(t)
+	in := filepath.Join(b.tmp, "in.jsonl")
+	if err := os.WriteFile(in, []byte(`{"uuid":"u1","cwd":"/a","sessionId":"s"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := runClaude
+	runClaude = func(string) error { return nil }
+	t.Cleanup(func() { runClaude = old })
+	out := captureStdout(func() {
+		if rc := Main([]string{"import", in, "-o"}); rc != 0 {
+			t.Fatalf("rc = %d", rc)
+		}
+	})
+	if !strings.HasPrefix(strings.TrimSpace(out), "imported") {
+		t.Fatalf("stdout = %q", out)
+	}
+	if strings.Contains(out, "resume:") {
+		t.Fatalf("open should not print resume line: %q", out)
+	}
 }
 
 func TestLsListsLocalID(t *testing.T) {

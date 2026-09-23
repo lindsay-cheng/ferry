@@ -178,10 +178,12 @@ func cmdImport(args []string) int {
 		return fail(err)
 	}
 	folder := filepath.Dir(connector.SessionPath(cwd, newID))
-	fmt.Printf("imported into %s\n  folder: %s\n  resume: claude --resume %s\n", newID, folder, newID)
 	if open {
+		fmt.Printf("imported\n  folder: %s\n", folder)
 		openSession(newID)
+		return 0
 	}
+	fmt.Printf("imported\n  folder: %s\n  resume: claude --resume %s\n", folder, newID)
 	return 0
 }
 

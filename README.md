@@ -1,12 +1,8 @@
-<p align="center">
-  <img src="assets/ferry.png" width="220" alt="Ferry">
-</p>
+![Ferry](assets/ferry.png)
 
-<h1 align="center">Ferry</h1>
+# Ferry
 
-<p align="center">
-  <em>Ferry moves your Claude Code session from one computer to another.</em>
-</p>
+*Ferry moves your Claude Code session from one computer to another.*
 
 ---
 
@@ -33,7 +29,7 @@ $ ferry export auth-refactor
 
 This writes `auth-refactor.jsonl` in the current folder. On a Mac, ferry also copies the file to the clipboard. Send that file to a teammate on computer B by Slack, AirDrop, email, or USB.
 
-If more than one Claude Code session exists for the working directory, ferry prints a numbered list. Session 1 is the most recently changed session. Press Enter to export session 1, or type another number.
+If more than one Claude Code session exists for the working directory, ferry prints a numbered list. Session 1 is the most recently changed session. Press Enter to export session 1, or type another number:
 
 ```
 $ ferry export auth-refactor
@@ -45,16 +41,17 @@ Choice [1]: 2
 
 `ferry ls` prints the same list. `ferry export auth-refactor --session 2` selects that number without the prompt.
 
-On computer B, the teammate downloads the file and imports it.
+On computer B, the teammate downloads the file, then imports and opens it:
 
 ```
-$ ferry import auth-refactor.jsonl
-imported into 7c9e6679-7425-40de-944b-e07fc1f90ae7
+$ ferry import auth-refactor.jsonl -o
+imported
   folder: /Users/sam/.claude/projects/-Users-sam-api
-  resume: claude --resume 7c9e6679-7425-40de-944b-e07fc1f90ae7
 ```
 
-This imports the file at that path. `ferry import` with no path lists `.jsonl` files in the current folder and in `~/Downloads`.
+`-o` runs `claude --resume` when `claude` is on PATH. If `claude` is not on PATH, ferry prints the resume command.
+
+If more than one `.jsonl` file exists in the current folder or in `~/Downloads`, ferry prints a numbered list. File 1 is the most recently changed file. Press Enter to import file 1, or type another number:
 
 ```
 $ ferry import
@@ -63,31 +60,22 @@ $ ferry import
 Choice [1]:
 ```
 
-If more than one `.jsonl` file exists, ferry prints a numbered list. If only one file exists, ferry imports that file.
+`ferry import` with no path uses that list. Add `-o` to open after import. If only one `.jsonl` file exists, ferry imports that file with no prompt.
 
-On computer B, open the session in Claude Code:
-
-```
-$ ferry import auth-refactor.jsonl -o
-imported into 7c9e6679-7425-40de-944b-e07fc1f90ae7
-  folder: /Users/sam/.claude/projects/-Users-sam-api
-  resume: claude --resume 7c9e6679-7425-40de-944b-e07fc1f90ae7
-```
-
-`-o` runs `claude --resume` when `claude` is on PATH. If `claude` is not on PATH, ferry prints the resume command.
+Without `-o`, ferry prints the `claude --resume` command instead of opening the session.
 
 The export is the raw session. If computer A pasted a secret into Claude, it is in the file. Do not commit it.
 
 ## Commands
 
 
-| Command                                | Description                                                                            |
-| -------------------------------------- | -------------------------------------------------------------------------------------- |
+| Command                                    | Description                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `ferry export <name> [--session <number>]` | Write a local session to `<name>.jsonl` in the current folder.                         |
 | `ferry import [<file>] [-o]`               | Import a `.jsonl` file into a new local session. `-o` opens it with `claude --resume`. |
 | `ferry ls`                                 | List local sessions as a numbered list. Session 1 is the most recently changed.        |
-| `ferry help`                           | Command reference.                                                                     |
-| `ferry --version`                      | Print the installed version.                                                           |
+| `ferry help`                               | Command reference.                                                                     |
+| `ferry --version`                          | Print the installed version.                                                           |
 
 
 Export names use letters, numbers, and hyphen. Ferry stores names in lowercase.

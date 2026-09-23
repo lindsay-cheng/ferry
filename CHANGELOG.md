@@ -4,8 +4,9 @@
 
 - `ferry ls` and `ferry export` print a numbered session list. Session 1 is the newest.
 - `--session` accepts a list number. Enter selects session 1.
+- `ferry import -o` prints the folder and opens Claude. It does not print the session id.
 - `main.go` lives in `cmd/`.
-- README uses the centered boat image and the Computer A / Computer B handoff.
+- README uses the Computer A / Computer B handoff and numbered lists for export and import.
 
 ## 0.1.0
 
