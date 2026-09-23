@@ -105,7 +105,7 @@ func TestVersionFlag(t *testing.T) {
 			t.Fatalf("rc = %d", rc)
 		}
 	})
-	if !strings.Contains(out, "ferry 0.1.0") {
+	if !strings.Contains(out, "ferry 0.1.1") {
 		t.Fatalf("version output = %q", out)
 	}
 }
@@ -178,7 +178,7 @@ func TestLsListsLocalID(t *testing.T) {
 			t.Fatalf("rc = %d", rc)
 		}
 	})
-	if strings.TrimSpace(out) != "only-one" {
+	if strings.TrimSpace(out) != "1. untitled" {
 		t.Fatalf("stdout = %q", out)
 	}
 }

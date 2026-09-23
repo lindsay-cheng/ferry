@@ -40,7 +40,7 @@ func NormalizeExportName(name string) (string, error) {
 	return base, nil
 }
 
-// PrepareExportText drops a truncated last line with a warning, like export push prep.
+// PrepareExportText drops a truncated last line with a warning.
 func PrepareExportText(text, sessionID string) (string, []string) {
 	if text == "" {
 		return text, nil
@@ -70,7 +70,7 @@ func Export(name, sessionID string) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	sessionID, err = ResolveSession(sessionID, chatCWD)
+	sessionID, err = pickSession(sessionID, chatCWD, ImportOptions{})
 	if err != nil {
 		return "", nil, err
 	}

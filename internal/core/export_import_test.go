@@ -116,11 +116,177 @@ func TestExportTwoLocalChatsWithoutSessionRaises(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, chat) {
-		t.Fatalf("msg missing chat: %q", msg)
+	if !strings.Contains(msg, "pass --session <number>") {
+		t.Fatalf("msg = %q", msg)
 	}
-	if !strings.Contains(msg, "old-sess") || !strings.Contains(msg, "new-sess") {
-		t.Fatalf("msg missing session ids: %q", msg)
+	if strings.Contains(msg, "old-sess") || strings.Contains(msg, "new-sess") {
+		t.Fatalf("msg dumps session ids: %q", msg)
+	}
+}
+
+func TestExportSessionNumberUsesNewestFirst(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	chat, err := ChatCWD()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.seedSession(chat, "old-sess", `{"type":"user","message":{"content":"old prompt"}}`+"\n")
+	b.seedSession(chat, "new-sess", `{"type":"ai-title","title":"new title"}`+"\n"+
+		`{"type":"user","message":{"content":"new prompt"}}`+"\n")
+	past := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(connector.SessionPath(chat, "old-sess"), past, past); err != nil {
+		t.Fatal(err)
+	}
+	lines, err := SessionListLines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 2 || lines[0] != "1. new title" || lines[1] != "2. old prompt" {
+		t.Fatalf("lines = %#v", lines)
+	}
+	if _, _, err := Export("picked", "1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(b.tmp, "picked.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "new title") {
+		t.Fatalf("exported the wrong session: %s", got)
+	}
+	id, err := pickSession("old-sess", chat, ImportOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "old-sess" {
+		t.Fatalf("id = %q", id)
+	}
+	if _, err := pickSession("9", chat, ImportOptions{}); err == nil {
+		t.Fatal("expected invalid choice")
+	}
+	tty := true
+	var buf bytes.Buffer
+	id, err = pickSession("", chat, ImportOptions{
+		StdinIsTTY: &tty,
+		ReadChoice: func() string { return "" },
+		ListOut:    &buf,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "new-sess" {
+		t.Fatalf("default choice = %q", id)
+	}
+	if !strings.Contains(buf.String(), "1. new title") {
+		t.Fatalf("list = %q", buf.String())
+	}
+}
+
+func TestExportSecondNumberAndPromptSelectOlder(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	chat, err := ChatCWD()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.seedSession(chat, "old-sess", `{"type":"user","message":{"content":"old prompt"}}`+"\n")
+	b.seedSession(chat, "new-sess", `{"type":"user","message":{"content":"new prompt"}}`+"\n")
+	past := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(connector.SessionPath(chat, "old-sess"), past, past); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Export("second", "2"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(b.tmp, "second.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "old prompt") || strings.Contains(string(got), "new prompt") {
+		t.Fatalf("exported the wrong session: %s", got)
+	}
+	tty := true
+	id, err := pickSession("", chat, ImportOptions{
+		StdinIsTTY: &tty,
+		ReadChoice: func() string { return "2" },
+		ListOut:    io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "old-sess" {
+		t.Fatalf("prompt choice = %q", id)
+	}
+}
+
+func TestExportPromptRejectsOutOfRange(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	chat, err := ChatCWD()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.seedSession(chat, "a-sess", `{"uuid":"a"}`+"\n")
+	b.seedSession(chat, "b-sess", `{"uuid":"b"}`+"\n")
+	tty := true
+	_, err = pickSession("", chat, ImportOptions{
+		StdinIsTTY: &tty,
+		ReadChoice: func() string { return "9" },
+		ListOut:    io.Discard,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid choice: 9") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSessionLabelUsesTextBlocks(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	chat, err := ChatCWD()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.seedSession(chat, "block-sess", `{"type":"user","message":{"content":[{"type":"text","text":"block prompt"}]}}`+"\n")
+	lines, err := SessionListLines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "1. block prompt" {
+		t.Fatalf("lines = %#v", lines)
+	}
+}
+
+func TestSessionListSameMtimeOrdersByID(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	chat, err := ChatCWD()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.seedSession(chat, "b-sess", `{"type":"user","message":{"content":"beta"}}`+"\n")
+	b.seedSession(chat, "a-sess", `{"type":"user","message":{"content":"alpha"}}`+"\n")
+	same := time.Unix(100, 0)
+	for _, id := range []string{"a-sess", "b-sess"} {
+		if err := os.Chtimes(connector.SessionPath(chat, id), same, same); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lines, err := SessionListLines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 2 || lines[0] != "1. alpha" || lines[1] != "2. beta" {
+		t.Fatalf("lines = %#v", lines)
+	}
+}
+
+func TestExportNoLocalSessions(t *testing.T) {
+	b := newExportImportBase(t)
+	b.chdir(b.tmp)
+	_, _, err := Export("chat", "")
+	if err == nil || !strings.Contains(err.Error(), "no local Claude sessions") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

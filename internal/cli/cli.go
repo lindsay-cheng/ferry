@@ -11,7 +11,7 @@ import (
 	"github.com/lindsay-cheng/ferry/internal/core"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 const tagline = "git for your Claude Code agent context"
 
@@ -29,14 +29,14 @@ var helpGroups = []helpGroup{
 	{
 		title: "share agent context across sessions",
 		cmds: []helpCmd{
-			{"export <name> [--session <id>]", "Write a local session to a .jsonl file"},
+			{"export <name> [--session <number>]", "Write a local session to a .jsonl file"},
 			{"import [<file>] [-o]", "Import a .jsonl file into a new local session"},
 		},
 	},
 	{
 		title: "manage stored sessions",
 		cmds: []helpCmd{
-			{"ls", "List local session ids"},
+			{"ls", "List local sessions by number"},
 		},
 	},
 	{
@@ -49,7 +49,7 @@ var helpGroups = []helpGroup{
 
 var helpNotes = []string{
 	"Arguments shown as [<...>] are optional; <...> are placeholders you fill in.",
-	"export omits '--session' when only one local chat exists; pass '--session <id>' when several do.",
+	"When several local sessions exist, export prints a numbered list. Pass '--session <number>', or press Enter to take 1 (the newest).",
 	"Session names are letters, numbers, and hyphen; stored lowercase. Reusing a name is an error.",
 	"Add '-o' / '--open' to import to resume the session immediately with 'claude --resume'.",
 	"Run 'ferry --version' to print the installed version.",
@@ -189,16 +189,12 @@ func cmdLs(args []string) int {
 	if len(args) != 0 {
 		return failMsg("unexpected arguments")
 	}
-	cwd, err := core.ChatCWD()
+	lines, err := core.SessionListLines()
 	if err != nil {
 		return fail(err)
 	}
-	ids, err := core.ListLocal(cwd)
-	if err != nil {
-		return fail(err)
-	}
-	for _, id := range ids {
-		fmt.Println(id)
+	for _, line := range lines {
+		fmt.Println(line)
 	}
 	return 0
 }

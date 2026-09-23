@@ -151,40 +151,11 @@ func resolveImportPath(file string, opts ImportOptions) (string, error) {
 	for i, c := range candidates {
 		fmt.Fprintln(out, formatImportCandidate(i+1, c.path))
 	}
-	isTTY := false
-	if opts.StdinIsTTY != nil {
-		isTTY = *opts.StdinIsTTY
-	} else {
-		isTTY = isTerminal(os.Stdin)
-	}
-	if !isTTY {
-		return "", &FerryError{Msg: "multiple .jsonl files — pass a path or a number"}
-	}
-	choice := ""
-	if opts.ReadChoice != nil {
-		choice = strings.TrimSpace(opts.ReadChoice())
-	} else {
-		fmt.Fprint(os.Stdout, "Choice [1]: ")
-		var line string
-		if _, err := fmt.Scanln(&line); err != nil && !strings.Contains(err.Error(), "unexpected newline") {
-			if err == io.EOF {
-				return "", &FerryError{Msg: "multiple .jsonl files — pass a path or a number"}
-			}
-			return "", err
-		}
-		choice = strings.TrimSpace(line)
-	}
-	if choice == "" {
-		return candidates[0].path, nil
-	}
-	n, err := parseChoice(choice)
+	n, err := chooseIndex(len(candidates), "multiple .jsonl files — pass a path or a number", opts)
 	if err != nil {
 		return "", err
 	}
-	if n < 1 || n > len(candidates) {
-		return "", &FerryError{Msg: fmt.Sprintf("invalid choice: %d", n)}
-	}
-	return candidates[n-1].path, nil
+	return candidates[n].path, nil
 }
 
 func parseChoice(choice string) (int, error) {
