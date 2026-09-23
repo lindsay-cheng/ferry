@@ -1,16 +1,14 @@
-<p align="center">
-  <img src="assets/ferry.png" width="220" alt="Ferry">
-</p>
+![Ferry](assets/ferry.png)
 
-<h1 align="center">Ferry</h1>
+# Ferry
 
-<p align="center">
-  <em>Ferry moves your Claude Code session from one computer to another.</em>
-</p>
+*Ferry moves your Claude Code session from one computer to another.*
 
 ---
 
 Ferry preserves the exact agent state: thinking blocks, tool calls, attachments, and subagents, things that /compact erases.
+
+Ferry began as Weave at a hackathon with Alex Tan, Raiyan Haque, Sujal Thapa, and Lindsay Cheng.
 
 ## Install
 
@@ -83,8 +81,6 @@ The export is the raw session. If computer A pasted a secret into Claude, it is 
 
 
 Export names use letters, numbers, and hyphen. Ferry stores names in lowercase.
-
-Ferry began as "Weave" at a hackathon made by Alex Tan, Raiyan Haque, Sujal Thapa, and Lindsay Cheng.
 
 ## License
 
